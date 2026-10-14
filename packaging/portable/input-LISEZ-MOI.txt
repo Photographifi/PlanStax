@@ -1,0 +1,7 @@
+Déposez dans ce dossier les vidéos à traiter (SER, AVI…).
+
+Puis dans PlanStax : menu Fichier > Traitement par lot (Ctrl+L) > Démarrer.
+Chaque vidéo donne une image, enregistrée dans le dossier « output ».
+
+Les vidéos déjà traitées sont ignorées : vous pouvez en ajouter de nouvelles
+et relancer le traitement à tout moment.

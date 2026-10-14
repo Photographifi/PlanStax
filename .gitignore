@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+packaging/build/
+input/
+output/
+# Shortcuts hold absolute paths of the local machine.
+*.lnk
+# Captures and results: too big for Git, and personal.
+*.ser
+*.avi
+*.mp4
+*.tif
+*.tiff
+*.fit
+*.fits

@@ -1,0 +1,46 @@
+PlanStax {version} — empilement et ondelettes pour l'imagerie planétaire
+==========================================================================
+
+INSTALLATION (rien à installer)
+  1. Clic droit sur le fichier .zip > « Extraire tout… » > Extraire.
+     Important : ne lancez pas le programme depuis l'intérieur du .zip.
+  2. Dans le dossier extrait, double-cliquez sur PlanStax.exe.
+     Le premier démarrage peut prendre une dizaine de secondes.
+  3. Pour l'avoir sur le Bureau : menu Aide > « Créer un raccourci sur le Bureau ».
+
+  Le dossier PlanStax peut être rangé où vous voulez (Documents, clé USB…).
+  Pour désinstaller : supprimez simplement le dossier.
+
+UTILISATION EN 5 ÉTAPES
+  1. Ctrl+O : ouvrir une vidéo SER ou AVI (ou la glisser dans la fenêtre).
+  2. F5 « Tout faire » : alignement, sélection des meilleures images, empilement.
+  3. Onglet Ondelettes : monter le gain des couches 1 à 3 pour faire ressortir
+     les détails ; un peu de débruitage sur les couches 1-2 si le bruit apparaît.
+  4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux.
+  5. Ctrl+S : enregistrer (TIFF 16 bits conseillé).
+
+  Touche B : comparer avant/après · F : ajuster à la fenêtre · F1 : guide rapide.
+
+PLUSIEURS VIDÉOS D'UN COUP (traitement par lot)
+  1. Déposez les vidéos dans le dossier « input » (à côté de PlanStax.exe).
+  2. Dans PlanStax : Fichier > Traitement par lot (Ctrl+L) > Démarrer.
+  3. Une image par vidéo est écrite dans le dossier « output ».
+  Réglez d'abord une vidéo à la main (ondelettes comprises) : le lot applique les
+  réglages actuels, ou le préréglage choisi dans la fenêtre du traitement par lot.
+
+SI QUELQUE CHOSE NE VA PAS
+  - Si Windows affiche « Windows a protégé votre ordinateur » : cliquez sur
+    « Informations complémentaires » puis « Exécuter quand même ».
+  - Si le programme refuse de démarrer, un message l'indique et les détails sont
+    enregistrés dans %APPDATA%\PlanStax\erreur-demarrage.txt
+    (à envoyer à la personne qui vous a donné PlanStax).
+
+CONFIGURATION REQUISE
+  Windows 10 ou 11, 64 bits. 8 Go de mémoire conseillés pour les grosses vidéos.
+
+À PROPOS
+  PlanStax est un logiciel libre (licence MIT), écrit en Python. PlanStax.exe
+  est l'interpréteur Python officiel (signé par la Python Software Foundation),
+  renommé ; le programme lui-même est dans runtime\site-packages\planstax.
+  Bibliothèques incluses : Python, NumPy, OpenCV, Qt (PySide6), tifffile ; leurs
+  licences se trouvent dans les dossiers correspondants.
