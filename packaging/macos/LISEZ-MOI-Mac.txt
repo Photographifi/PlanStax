@@ -1,0 +1,60 @@
+PlanStax {version} pour Mac — empilement et ondelettes pour l'imagerie planétaire
+=================================================================================
+
+Première version Mac : elle n'a encore été essayée sur aucun Mac réel. Merci de signaler tout
+problème, en copiant ce qui s'affiche dans la fenêtre du Terminal.
+
+CE QU'IL FAUT
+  macOS 12 (Monterey) ou plus récent, Mac Apple Silicon (M1, M2, M3, M4…) ou Intel.
+  Python 3.13, à installer une fois depuis https://www.python.org/downloads/macos/
+  (« macOS 64-bit universal2 installer »). Le Python livré avec macOS est trop ancien.
+  Une connexion Internet au premier lancement (environ 150 Mo de bibliothèques, téléchargées
+  une seule fois).
+
+INSTALLATION
+  1. Double-cliquez sur l'archive .zip : le dossier PlanStax apparaît (en général dans
+     Téléchargements). Rangez-le où vous voulez, par exemple dans votre dossier personnel.
+  2. Premier lancement, depuis le Terminal (Applications > Utilitaires > Terminal) : tapez
+       bash
+     suivi d'une espace, glissez le fichier PlanStax.command du dossier dans la fenêtre du
+     Terminal, puis appuyez sur Entrée.
+     Le Terminal installe les bibliothèques (quelques minutes), puis la fenêtre de PlanStax
+     s'ouvre.
+  3. Les fois suivantes : double-cliquez simplement sur PlanStax.command.
+
+  Pourquoi passer par le Terminal la première fois ? macOS (Gatekeeper) refuse d'ouvrir d'un
+  double-clic un fichier téléchargé qui ne provient pas d'un développeur enregistré chez Apple.
+  Après ce premier lancement, PlanStax lève lui-même ce blocage sur son dossier.
+  Autre possibilité : double-cliquez sur PlanStax.command, refusez, puis ouvrez Réglages
+  Système > Confidentialité et sécurité et cliquez sur « Ouvrir quand même ».
+
+UTILISATION
+  1. ⌘O : ouvrir une vidéo SER, AVI, MP4… (ou la glisser dans la fenêtre).
+  2. F5 « Tout faire » : alignement, sélection des meilleures images, empilement.
+  3. Onglet Ondelettes : monter le gain des couches 1 à 3 pour faire ressortir les détails.
+  4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux.
+  5. ⌘S : enregistrer (TIFF 16 bits conseillé).
+  Sur l'image de référence : ⌘ + clic ajoute un point d'alignement, Maj + clic le retire.
+
+  Plusieurs vidéos d'un coup : déposez-les dans le dossier « input » (créé à côté de
+  PlanStax.command), puis Fichier > Traitement par lot (⌘L) > Démarrer ; une image par vidéo
+  est écrite dans « output ».
+
+  La fenêtre du Terminal reste ouverte pendant que PlanStax fonctionne : c'est normal, ne la
+  fermez pas (vous pourrez la fermer après avoir quitté PlanStax).
+
+  Réglages et préréglages : ~/Library/Application Support/PlanStax
+
+EN CAS DE PROBLÈME
+  - « Python 3.10 ou plus récent est introuvable » : installez Python 3.13 (voir plus haut),
+    puis relancez.
+  - Pour tout réinstaller : supprimez le sous-dossier caché .venv (dans le Terminal :
+    rm -rf ~/chemin/vers/PlanStax/.venv), puis relancez.
+
+DÉSINSTALLATION
+  Supprimez le dossier PlanStax et, si vous le souhaitez,
+  ~/Library/Application Support/PlanStax.
+
+À PROPOS
+  PlanStax est un logiciel libre (licence MIT, © 2026 Photographifi), écrit en Python avec
+  NumPy, OpenCV, Qt (PySide6) et tifffile. Il n'a aucun lien avec RegiStax ni son auteur.

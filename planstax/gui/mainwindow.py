@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import sys
 
 import numpy as np
 from PySide6.QtCore import QSettings, QSignalBlocker, Qt, QTimer, QUrl
@@ -28,6 +29,8 @@ from .widgets import QualityPlot, ValueSlider, dspin, group, hint, spin
 from .workers import PreviewWorker, Task
 
 TAB_ALIGN, TAB_SELECT, TAB_STACK, TAB_WAVELETS, TAB_POST = range(5)
+# Qt turns the Ctrl of shortcuts and modifier clicks into the Command key on macOS: say so in texts.
+CMD = "⌘" if sys.platform == "darwin" else "Ctrl"
 
 def _file_filter(label: str, extensions) -> str:
     # Both cases: file dialogs match patterns case-sensitively on Linux (P1006397.MP4, JUPITER.SER).
@@ -233,7 +236,7 @@ class MainWindow(QMainWindow):
 
     def _build_statusbar(self) -> None:
         sb = self.statusBar()
-        self.status_label = QLabel("Ouvrez une vidéo (Ctrl+O) ou glissez-la dans la fenêtre.")
+        self.status_label = QLabel(f"Ouvrez une vidéo ({CMD}+O) ou glissez-la dans la fenêtre.")
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
         self.progress.setMaximumWidth(260)
@@ -344,7 +347,7 @@ class MainWindow(QMainWindow):
         self.points_label = QLabel("")
         self.points_label.setWordWrap(True)
         form.addRow(self.points_label)
-        form.addRow(hint("Ctrl + clic sur l'image : ajouter un point · Maj + clic : supprimer · "
+        form.addRow(hint(f"{CMD} + clic sur l'image : ajouter un point · Maj + clic : supprimer · "
                          "molette : zoom · glisser : déplacer"))
         lay.addWidget(box)
 
@@ -829,7 +832,7 @@ class MainWindow(QMainWindow):
         self._set_stacked(img)
         if goto is not None:
             self.tabs.setCurrentIndex(goto)
-        self.status_label.setText("Empilement terminé. Réglez les ondelettes puis enregistrez (Ctrl+S).")
+        self.status_label.setText(f"Empilement terminé. Réglez les ondelettes puis enregistrez ({CMD}+S).")
 
     def _set_stacked(self, img: np.ndarray) -> None:
         self.stacked = img
@@ -1202,16 +1205,16 @@ class MainWindow(QMainWindow):
 
     def _show_help(self) -> None:
         QMessageBox.information(self, "Guide rapide", (
-            "1. Ouvrez une vidéo SER ou AVI (Ctrl+O, ou glisser-déposer).\n"
+            f"1. Ouvrez une vidéo SER ou AVI ({CMD}+O, ou glisser-déposer).\n"
             "2. Cliquez sur « Tout faire » (F5) : analyse de la qualité, image de référence, "
             "points d'alignement, alignement, sélection et empilement.\n"
             "3. Onglet Ondelettes : montez le gain des couches 1 à 3 pour faire ressortir les détails, "
             "et utilisez le débruitage des couches 1-2 si le bruit apparaît.\n"
             "4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux.\n"
-            "5. Enregistrez (Ctrl+S) en TIFF 16 bits.\n\n"
+            f"5. Enregistrez ({CMD}+S) en TIFF 16 bits.\n\n"
             "Plusieurs vidéos : déposez-les dans le dossier « input », puis Fichier → Traitement "
-            "par lot (Ctrl+L). Une image par vidéo est écrite dans le dossier « output ».\n\n"
-            "Pour affiner : réglez les points dans l'onglet Alignement (Ctrl+clic pour en ajouter, "
+            f"par lot ({CMD}+L). Une image par vidéo est écrite dans le dossier « output ».\n\n"
+            f"Pour affiner : réglez les points dans l'onglet Alignement ({CMD}+clic pour en ajouter, "
             "Maj+clic pour en retirer), le pourcentage d'images gardées dans l'onglet Sélection, "
             "et la sélection locale dans l'onglet Empilement.\n\n"
             "Touche B : avant/après · F : ajuster · 1 : 100 % · P : afficher les points."))

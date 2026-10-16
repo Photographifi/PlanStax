@@ -1,7 +1,8 @@
-"""Build dist/PlanStax-<version>-Linux.zip: the sources plus a launcher script that installs the
-libraries into a private environment on first run (see packaging/linux/).
+"""Build dist/PlanStax-<version>-Linux.zip and dist/PlanStax-<version>-Mac.zip: the sources plus
+a launcher script that installs the libraries into a private environment on first run
+(see packaging/linux/ and packaging/macos/).
 
-    .venv\\Scripts\\python.exe packaging\\build_linux_zip.py
+    .venv\\Scripts\\python.exe packaging\\build_source_zips.py
 """
 
 from __future__ import annotations
@@ -17,8 +18,13 @@ from planstax import __version__  # noqa: E402
 
 TOP = "PlanStax"
 FILES = ["LICENSE", "README.md", "pyproject.toml", "requirements.txt"]
-EXECUTABLE = 0o100755 << 16   # rwxr-xr-x, honoured by unzip on Linux
+EXECUTABLE = 0o100755 << 16   # rwxr-xr-x, honoured by unzip and the macOS Archive Utility
 REGULAR = 0o100644 << 16
+# target → (folder in packaging/, launcher script, read-me)
+TARGETS = {
+    "Linux": ("linux", "planstax.sh", "LISEZ-MOI-Linux.txt"),
+    "Mac": ("macos", "PlanStax.command", "LISEZ-MOI-Mac.txt"),
+}
 
 
 def _lf(data: bytes) -> bytes:
@@ -35,9 +41,10 @@ def _add(zf: zipfile.ZipFile, arcname: str, data: bytes, mode: int = REGULAR) ->
     zf.writestr(info, data)
 
 
-def build(out_dir: str) -> str:
+def build(out_dir: str, target: str) -> str:
+    folder, launcher, readme = TARGETS[target]
     os.makedirs(out_dir, exist_ok=True)
-    path = os.path.join(out_dir, f"PlanStax-{__version__}-Linux.zip")
+    path = os.path.join(out_dir, f"PlanStax-{__version__}-{target}.zip")
     count = 0
     with zipfile.ZipFile(path, "w") as zf:
         for name in FILES:
@@ -56,17 +63,18 @@ def build(out_dir: str) -> str:
                     data = fh.read()
                 _add(zf, rel, _lf(data) if f.endswith(".py") else data)
                 count += 1
-        with open(os.path.join(HERE, "linux", "planstax.sh"), "rb") as fh:
-            _add(zf, "planstax.sh", _lf(fh.read()), EXECUTABLE)
-        with open(os.path.join(HERE, "linux", "LISEZ-MOI-Linux.txt"), encoding="utf-8") as fh:
-            _add(zf, "LISEZ-MOI-Linux.txt", fh.read().replace("{version}", __version__).encode("utf-8"))
+        with open(os.path.join(HERE, folder, launcher), "rb") as fh:
+            _add(zf, launcher, _lf(fh.read()), EXECUTABLE)
+        with open(os.path.join(HERE, folder, readme), encoding="utf-8") as fh:
+            _add(zf, readme, fh.read().replace("{version}", __version__).encode("utf-8"))
         count += 2
     print(f"archive : {path} ({count} fichiers, {os.path.getsize(path) / 1024:.0f} Ko)")
     return path
 
 
 def main() -> int:
-    build(os.path.join(ROOT, "dist"))
+    for target in TARGETS:
+        build(os.path.join(ROOT, "dist"), target)
     return 0
 
 

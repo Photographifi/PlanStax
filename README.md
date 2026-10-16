@@ -31,6 +31,7 @@ Sur la page **Releases** du projet :
 | Fichier | Pour qui |
 |---|---|
 | **PlanStax-&lt;version&gt;-Windows.zip** | **Windows 10/11.** Décompressez (clic droit → « Extraire tout… »), puis double-cliquez sur `PlanStax.exe`. Rien à installer. |
+| **PlanStax-&lt;version&gt;-Mac.zip** | **macOS 12 ou plus récent** (Apple Silicon ou Intel), avec Python 3.13 de python.org. Voir `LISEZ-MOI-Mac.txt` dans l'archive : `PlanStax.command` installe tout au premier lancement. |
 | **PlanStax-&lt;version&gt;-Linux.zip** | **Linux 64 bits.** Voir `LISEZ-MOI-Linux.txt` dans l'archive : `./planstax.sh` installe tout au premier lancement. |
 
 ### Windows (sans Python)
@@ -42,15 +43,20 @@ Sur la page **Releases** du projet :
 Il n'y a rien à installer. Le menu *Aide → Créer un raccourci sur le Bureau* ajoute un raccourci.
 Pour désinstaller, supprimez le dossier.
 
-### Linux (expérimental)
+### Mac et Linux (expérimental)
 
-`PlanStax-<version>-Linux.zip` contient les sources et un script `planstax.sh`. Au premier
-lancement, ce script installe les bibliothèques dans un sous-dossier `.venv`, environ 150 Mo
-téléchargés une seule fois. Il faut Python 3.10 ou plus récent ; les paquets système à
-installer selon la distribution sont indiqués dans `LISEZ-MOI-Linux.txt`. PyPI fournit des
-bibliothèques toutes prêtes pour x86_64 et ARM64, de Python 3.10 à 3.14. Cette version n'a pas
-encore été essayée sur un vrai Linux. Pour fabriquer l'archive :
-`.venv\Scripts\python.exe packaging\build_linux_zip.py`.
+`PlanStax-<version>-Mac.zip` et `PlanStax-<version>-Linux.zip` contiennent les sources et un
+script de lancement (`PlanStax.command` ou `planstax.sh`). Au premier lancement, ce script
+installe les bibliothèques dans un sous-dossier `.venv`, environ 150 Mo téléchargés une seule
+fois. Il faut Python 3.10 ou plus récent : Python 3.13 de python.org sur Mac, et sur Linux
+les paquets indiqués dans `LISEZ-MOI-Linux.txt`.
+
+PyPI fournit des bibliothèques toutes prêtes pour macOS 12+ (Apple Silicon et Intel) et pour
+Linux x86_64/ARM64, de Python 3.10 à 3.14. Ces versions n'ont pas encore été essayées sur un
+vrai Mac ni sur un vrai Linux. Sur Mac, le premier lancement se fait depuis le Terminal, car
+Gatekeeper bloque au double-clic les scripts téléchargés : voir `LISEZ-MOI-Mac.txt`.
+
+Pour fabriquer les deux archives : `.venv\Scripts\python.exe packaging\build_source_zips.py`.
 
 ### Depuis les sources
 
@@ -146,7 +152,8 @@ Options utiles de `stack` : `--percent 50` (images gardées), `--scale 1.5` (agr
 
 ## Où sont les réglages
 
-`%APPDATA%\PlanStax\` :
+`%APPDATA%\PlanStax\` sous Windows, `~/Library/Application Support/PlanStax` sur Mac,
+`~/.config/PlanStax` sous Linux :
 - `presets\*.json` : les préréglages, lisibles et modifiables ;
 - `last.json` : les derniers réglages, restaurés au démarrage ;
 - `interface.ini` : la taille de la fenêtre, les derniers dossiers et le thème.
@@ -199,7 +206,7 @@ bibliothèque DLL trouve ses dépendances, Visual C++ compris, pour fonctionner 
 ## Développement
 
 ```powershell
-.venv\Scripts\python.exe -m pytest        # 46 tests : formats, alignement, empilement, lot, interface, archives
+.venv\Scripts\python.exe -m pytest        # 49 tests : formats, alignement, empilement, lot, interface, archives
 ```
 
 Organisation du code :

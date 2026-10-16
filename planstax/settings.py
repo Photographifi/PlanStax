@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shutil
+import sys
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 
 from . import APP_NAME
@@ -138,8 +139,18 @@ def _from_dict(cls, data):
 FORMER_NAMES = ("PlanetStack",)  # earlier names of the program, whose settings are taken over
 
 
+def _config_base() -> str:
+    """The per-user settings folder of the platform."""
+    if os.environ.get("APPDATA"):                      # Windows
+        return os.environ["APPDATA"]
+    home = os.path.expanduser("~")
+    if sys.platform == "darwin":
+        return os.path.join(home, "Library", "Application Support")
+    return os.environ.get("XDG_CONFIG_HOME") or os.path.join(home, ".config")
+
+
 def config_dir() -> str:
-    base = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), ".config")
+    base = _config_base()
     path = os.path.join(base, APP_NAME)
     if not os.path.isdir(path):
         # First start under this name: take over the presets and settings of a former name

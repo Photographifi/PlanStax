@@ -26,6 +26,17 @@ def _bayer_choice(override: str | None, declared: str | None) -> str | None:
     return override or declared
 
 BAYER_PATTERNS = ("RGGB", "GRBG", "GBRG", "BGGR")
+# OpenCV's historical names for the same patterns (second row, second and third pixels): older
+# releases — still installed on Intel Macs and older macOS — lack the RGGB-style aliases.
+_OPENCV_BAYER = {"RGGB": "BG", "GRBG": "GB", "GBRG": "GR", "BGGR": "RG"}
+
+
+def _bayer_code(pattern: str, suffix: str = "") -> int | None:
+    for name in (f"COLOR_Bayer{pattern}2RGB{suffix}", f"COLOR_Bayer{_OPENCV_BAYER[pattern]}2RGB{suffix}"):
+        code = getattr(cv2, name, None)
+        if code is not None:
+            return code
+    return None
 
 
 def debayer(raw: np.ndarray, pattern: str) -> np.ndarray:
@@ -33,10 +44,13 @@ def debayer(raw: np.ndarray, pattern: str) -> np.ndarray:
     pattern = pattern.upper()
     if pattern not in BAYER_PATTERNS:
         raise ValueError(f"Matrice de Bayer inconnue : {pattern}")
-    try:
-        return cv2.cvtColor(raw, getattr(cv2, f"COLOR_Bayer{pattern}2RGB_EA"))
-    except (AttributeError, cv2.error):
-        return cv2.cvtColor(raw, getattr(cv2, f"COLOR_Bayer{pattern}2RGB"))
+    edge_aware = _bayer_code(pattern, "_EA")
+    if edge_aware is not None:
+        try:
+            return cv2.cvtColor(raw, edge_aware)
+        except cv2.error:
+            pass
+    return cv2.cvtColor(raw, _bayer_code(pattern))
 
 
 def luminance(frame: np.ndarray) -> np.ndarray:
