@@ -8,9 +8,23 @@
 #       --workpath packaging\build\pyi packaging\planstax_exe.spec
 import os
 
+import sys
+
 HERE = os.path.abspath(SPECPATH)
 ROOT = os.path.dirname(HERE)
 ICON = os.path.join(ROOT, "planstax", "resources", "planstax.ico")
+
+# File properties (version, author) filled in from planstax.__version__.
+sys.path.insert(0, ROOT)
+from planstax import __version__  # noqa: E402
+
+numbers = ", ".join((__version__.split(".") + ["0"] * 4)[:4])
+with open(os.path.join(HERE, "version_info.txt"), encoding="utf-8") as fh:
+    version_text = fh.read().replace("{numbers}", numbers).replace("{version}", __version__)
+VERSION_FILE = os.path.join(HERE, "build", "version_info.txt")
+os.makedirs(os.path.dirname(VERSION_FILE), exist_ok=True)
+with open(VERSION_FILE, "w", encoding="utf-8") as fh:
+    fh.write(version_text)
 
 a = Analysis(
     [os.path.join(HERE, "launch_exe.py")],
@@ -22,4 +36,4 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, a.binaries, a.datas, [], name="PlanStax-autonome", console=False,
-          icon=ICON, version=os.path.join(HERE, "version_info.txt"), upx=False)
+          icon=ICON, version=VERSION_FILE, upx=False)
