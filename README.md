@@ -25,6 +25,16 @@ RegiStax et n'a aucun lien avec RegiStax ni avec son auteur.
 Il n'y a rien à installer. Le menu *Aide → Créer un raccourci sur le Bureau* ajoute un raccourci.
 Pour désinstaller, supprimez le dossier.
 
+### Linux (expérimental)
+
+`PlanStax-<version>-Linux.zip` contient les sources et un script `planstax.sh`. Au premier
+lancement, ce script installe les bibliothèques dans un sous-dossier `.venv`, environ 150 Mo
+téléchargés une seule fois. Il faut Python 3.10 ou plus récent ; les paquets système à
+installer selon la distribution sont indiqués dans `LISEZ-MOI-Linux.txt`. PyPI fournit des
+bibliothèques toutes prêtes pour x86_64 et ARM64, de Python 3.10 à 3.14. Cette version n'a pas
+encore été essayée sur un vrai Linux. Pour fabriquer l'archive :
+`.venv\Scripts\python.exe packaging\build_linux_zip.py`.
+
 ### Depuis les sources
 
 Avec [Python 3.12](https://www.python.org/downloads/) installé :
@@ -172,7 +182,7 @@ bibliothèque DLL trouve ses dépendances, Visual C++ compris, pour fonctionner 
 ## Développement
 
 ```powershell
-.venv\Scripts\python.exe -m pytest        # 44 tests : formats, alignement, empilement, lot, interface
+.venv\Scripts\python.exe -m pytest        # 46 tests : formats, alignement, empilement, lot, interface, archives
 ```
 
 Organisation du code :

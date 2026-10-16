@@ -1,0 +1,6 @@
+# Same libraries as the "dependencies" of pyproject.toml (tests/test_packaging.py checks it).
+numpy>=2.1,<2.3; sys_platform == 'win32'
+numpy>=2.1; sys_platform != 'win32'
+opencv-python-headless>=4.8
+PySide6-Essentials>=6.6
+tifffile>=2023.7

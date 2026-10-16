@@ -11,9 +11,11 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Photographifi" }]
 dependencies = [
-    # Kept on a widely deployed release: Windows 11 Smart App Control judges NumPy's unsigned
-    # modules by reputation and blocked the very recent 2.5.4 (October 2026).
-    "numpy>=2.1,<2.3",
+    # Windows: kept on a widely deployed release — Smart App Control judges NumPy's unsigned
+    # modules by reputation and blocked the very recent 2.5.4 (October 2026). Elsewhere, no cap:
+    # NumPy 2.2 has no build for the Python 3.14 of recent Linux distributions.
+    "numpy>=2.1,<2.3; sys_platform == 'win32'",
+    "numpy>=2.1; sys_platform != 'win32'",
     "opencv-python-headless>=4.8",
     "PySide6-Essentials>=6.6",
     "tifffile>=2023.7",

@@ -29,8 +29,14 @@ from .workers import PreviewWorker, Task
 
 TAB_ALIGN, TAB_SELECT, TAB_STACK, TAB_WAVELETS, TAB_POST = range(5)
 
-VIDEO_FILTER = "Vidéos (" + " ".join("*" + e for e in VIDEO_EXTENSIONS) + ")"
-IMAGE_FILTER = "Images (" + " ".join("*" + e for e in IMAGE_EXTENSIONS) + ")"
+def _file_filter(label: str, extensions) -> str:
+    # Both cases: file dialogs match patterns case-sensitively on Linux (P1006397.MP4, JUPITER.SER).
+    patterns = [f"*{e}" for e in extensions] + [f"*{e.upper()}" for e in extensions]
+    return f"{label} ({' '.join(patterns)})"
+
+
+VIDEO_FILTER = _file_filter("Vidéos", VIDEO_EXTENSIONS)
+IMAGE_FILTER = _file_filter("Images", IMAGE_EXTENSIONS)
 SAVE_FILTERS = {
     "TIFF 16 bits (*.tif)": (".tif", 16),
     "PNG 16 bits (*.png)": (".png", 16),

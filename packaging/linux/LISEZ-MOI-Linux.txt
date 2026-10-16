@@ -1,0 +1,59 @@
+PlanStax {version} pour Linux — empilement et ondelettes pour l'imagerie planétaire
+=====================================================================================
+
+Première version Linux : elle n'a encore été essayée sur aucun Linux réel. Merci de signaler
+tout problème, en copiant ce qui s'affiche dans le terminal.
+
+CE QU'IL FAUT
+  Linux 64 bits (PC x86_64 ou ARM64), Python 3.10 ou plus récent, et une connexion Internet
+  au premier lancement (environ 150 Mo de bibliothèques, téléchargées une seule fois).
+
+  Paquets système à installer d'abord, selon la distribution :
+    Ubuntu, Debian, Linux Mint :  sudo apt install python3 python3-venv libxcb-cursor0
+    Fedora :                      sudo dnf install python3 xcb-util-cursor
+    Arch, Manjaro :               sudo pacman -S python xcb-util-cursor
+    openSUSE :                    sudo zypper install python3 libxcb-cursor0
+
+INSTALLATION
+  1. Décompressez l'archive, par exemple dans votre dossier personnel :
+       unzip PlanStax-{version}-Linux.zip
+  2. Lancez PlanStax depuis un terminal :
+       cd PlanStax
+       chmod +x planstax.sh       (si nécessaire)
+       ./planstax.sh
+     Le premier lancement installe les bibliothèques dans le sous-dossier .venv, puis ouvre
+     la fenêtre. Les fois suivantes, la fenêtre s'ouvre directement.
+
+UTILISATION
+  ./planstax.sh                 ouvre l'interface
+  ./planstax.sh video.ser       ouvre l'interface avec une vidéo (SER, AVI, MP4…)
+
+  Dans l'interface :
+    1. Ctrl+O : ouvrir une vidéo (ou la glisser dans la fenêtre).
+    2. F5 « Tout faire » : alignement, sélection des meilleures images, empilement.
+    3. Onglet Ondelettes : monter le gain des couches 1 à 3 pour faire ressortir les détails.
+    4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux.
+    5. Ctrl+S : enregistrer (TIFF 16 bits conseillé).
+
+  Plusieurs vidéos d'un coup : déposez-les dans le dossier « input » (créé à côté de
+  planstax.sh), puis Fichier > Traitement par lot (Ctrl+L) > Démarrer ; une image par vidéo
+  est écrite dans « output ». En ligne de commande :
+       ./planstax.sh batch                         (dossiers input → output)
+       ./planstax.sh batch ~/Captures ~/Images     (autres dossiers)
+
+  Réglages et préréglages : ~/.config/PlanStax
+
+EN CAS DE PROBLÈME
+  - « Could not load the Qt platform plugin "xcb" » : installez le paquet libxcb-cursor
+    indiqué plus haut pour votre distribution.
+  - Sous Wayland, si la fenêtre ne s'affiche pas, essayez :
+       QT_QPA_PLATFORM=xcb ./planstax.sh
+  - Pour tout réinstaller : supprimez le sous-dossier .venv, puis relancez ./planstax.sh.
+  - Pour utiliser un autre Python :  PYTHON=python3.12 ./planstax.sh
+
+DÉSINSTALLATION
+  Supprimez le dossier PlanStax et, si vous le souhaitez, ~/.config/PlanStax.
+
+À PROPOS
+  PlanStax est un logiciel libre (licence MIT, © 2026 Photographifi), écrit en Python avec
+  NumPy, OpenCV, Qt (PySide6) et tifffile. Il n'a aucun lien avec RegiStax ni son auteur.
