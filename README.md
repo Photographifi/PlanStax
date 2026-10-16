@@ -15,7 +15,34 @@ PlanStax est écrit de zéro, à partir d'algorithmes publics. Il ne contient au
 RegiStax et n'a aucun lien avec RegiStax ni avec son auteur.
 
 ## Installation
+Première version publique de **PlanStax** : empilement « lucky imaging » et ondelettes pour l'imagerie planétaire, lunaire, solaire et terrestre (vidéos SER, AVI, MP4), sur le modèle du déroulement de travail de RegiStax 6.
 
+## Quel fichier télécharger ?
+
+| Fichier | Pour qui |
+|---|---|
+| **PlanStax-0.3.0-Windows.zip** | **Windows 10/11 : le choix conseillé.** Décompressez (clic droit → « Extraire tout… »), puis double-cliquez sur `PlanStax.exe`. Rien à installer. |
+| PlanStax-autonome.exe | Windows, version en un seul fichier (expérimentale). Plus pratique, mais non signée : Windows peut la bloquer ou afficher « Windows a protégé votre ordinateur » (→ « Informations complémentaires » → « Exécuter quand même »). En cas de blocage, utilisez le .zip. |
+
+|**PlanStax-0.3.0-Linux.zip** | **Linux 64 bits** . Voir `LISEZ-MOI-Linux.txt` dans l'archive : `./planstax.sh` installe tout au premier lancement. |
+
+## Fonctions
+
+- Alignement global et multipoints, sélection des meilleures images (globale et locale), empilement, agrandissement 1,5×–3×.
+- Ondelettes à 6 couches (gain et débruitage par couche), alignement RVB, balance des couleurs, niveaux.
+- Traitement par lot : toutes les vidéos d'un dossier « input » → une image par vidéo dans « output ».
+- Import des réglages RegiStax 6 (points d'alignement, sélection).
+- Formats : SER, AVI, MP4, FITS, TIFF, PNG ; sortie TIFF/PNG 16 bits, FITS, JPEG.
+
+## Empreintes SHA-256
+
+```
+72cf50f9e5406019ad3b2356fd5ff0a2912e731afd94d47fa9683ae4fdf9f5f4  PlanStax-0.3.0-Windows.zip
+bb0ff5d4fa073ed9293e067fc1ba0afaa63df25eb798b792ebfcd29ca3eaa616  PlanStax-0.3.0-Linux.zip
+9aa948bf959496e7ce49ea9d830743c070f24dfdf6532a6c3f8bdbb61dc928f3  PlanStax-autonome.exe
+```
+
+PlanStax est écrit de zéro et n'a aucun lien avec RegiStax ni avec son auteur. Licence MIT.
 ### Pour l'utiliser (sans Python)
 
 1. Téléchargez `PlanStax-<version>-Windows.zip` depuis la page **Releases** du projet.
