@@ -23,7 +23,6 @@ Première version publique de **PlanStax** : empilement « lucky imaging » et o
 |---|---|
 | **PlanStax-0.3.0-Windows.zip** | **Windows 10/11 : le choix conseillé.** Décompressez (clic droit → « Extraire tout… »), puis double-cliquez sur `PlanStax.exe`. Rien à installer. |
 | PlanStax-autonome.exe | Windows, version en un seul fichier (expérimentale). Plus pratique, mais non signée : Windows peut la bloquer ou afficher « Windows a protégé votre ordinateur » (→ « Informations complémentaires » → « Exécuter quand même »). En cas de blocage, utilisez le .zip. |
-
 |**PlanStax-0.3.0-Linux.zip** | **Linux 64 bits** . Voir `LISEZ-MOI-Linux.txt` dans l'archive : `./planstax.sh` installe tout au premier lancement. |
 
 ## Fonctions
