@@ -31,7 +31,7 @@ UTILISATION
   Dans l'interface :
     1. Ctrl+O : ouvrir une vidéo (ou la glisser dans la fenêtre).
     2. F5 « Tout faire » : alignement, sélection des meilleures images, empilement.
-    3. Onglet Ondelettes : monter le gain des couches 1 à 3 pour faire ressortir les détails.
+    3. Onglet Ondelettes : monter l'accentuation des couches 1 à 3 (30 à 50 pour commencer).
     4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux.
     5. Ctrl+S : enregistrer (TIFF 16 bits conseillé).
 

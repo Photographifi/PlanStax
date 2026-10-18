@@ -11,14 +11,14 @@ import numpy as np
 from PySide6.QtCore import QSettings, QSignalBlocker, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog,
-                               QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
+                               QGridLayout, QHBoxLayout, QInputDialog, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QScrollArea, QSlider, QSpinBox,
                                QSplitter, QTabWidget, QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from .. import APP_NAME, __version__
 from ..core import Pipeline, auto_balance, estimate_rgb_shifts, finish
 from ..core.postprocess import apply_post, apply_pre
-from ..core.wavelets import WaveletProcessor
+from ..core.wavelets import WaveletProcessor, amount_from_gain, gain_from_amount
 from ..io import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, open_source, read_image, save_image
 from ..io.sources import NO_BAYER
 from ..settings import (Settings, config_dir, import_all_registax, list_presets, load_preset,
@@ -469,32 +469,50 @@ class MainWindow(QMainWindow):
         lay.addWidget(box)
 
         box, form = group("Couches")
-        self.layer_checks, self.layer_gain, self.layer_denoise = [], [], []
+        self.layer_checks, self.layer_gain, self.layer_factor, self.layer_denoise = [], [], [], []
+        table = QWidget()
+        grid = QGridLayout(table)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setVerticalSpacing(2)
+        grid.setColumnStretch(0, 1)
+        for col, text in ((1, "Accentuation"), (2, "Gain"), (3, "Débruitage")):
+            title = QLabel(text)
+            title.setStyleSheet("color: palette(mid); font-size: 9pt;")
+            grid.addWidget(title, 0, col)
         for i in range(6):
             Li = lambda i=i: self.settings.wavelet.layers[i]  # noqa: E731
             chk = QCheckBox(f"Couche {i + 1}")
             self._bind_attr(chk, Li, "enabled", self._on_layer_toggled)
-            gain = ValueSlider(0.0, 100.0, 0.1, 1.0, 1)
-            gain.setToolTip("Accentuation : 1 = neutre, plus = plus de détail à cette échelle")
-            self._bind_attr(gain, Li, "gain", self._request_preview)
+            # The slider gets a line of its own: the whole width of the panel for fine control.
+            gain = ValueSlider(0.0, 100.0, 0.5, 0.0, 1, spin_beside=False)
+            gain.setToolTip("Accentuation de cette couche : 0 = image intacte, 100 = le plus fort.\n"
+                            "La plage est adaptée à chaque couche : un même réglage donne un effet\n"
+                            "comparable de la couche 1 à la couche 6.")
+            self._bind(gain, lambda Li=Li, i=i: amount_from_gain(i, Li().gain),
+                       lambda v, Li=Li, i=i: setattr(Li(), "gain", gain_from_amount(i, v)),
+                       self._on_gain_changed)
+            factor = QLabel()
+            factor.setMinimumWidth(46)
+            factor.setToolTip("Gain appliqué à la couche (valeur enregistrée dans les préréglages)")
             den = dspin(0.0, 1.0, 0.0, 0.05, 2)
             den.setToolTip("Débruitage de la couche (0 = aucun)")
+            den.setFixedWidth(64)
             self._bind_attr(den, Li, "denoise", self._request_preview)
-            row = QWidget()
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(0, 0, 0, 0)
-            rl.addWidget(gain, 1)
-            rl.addWidget(QLabel("Débruit."))
-            rl.addWidget(den)
-            form.addRow(chk, row)
+            for col, widget in enumerate((chk, gain.spin, factor, den)):
+                grid.addWidget(widget, 2 * i + 1, col)
+            grid.addWidget(gain, 2 * i + 2, 0, 1, 4)
+            grid.setRowMinimumHeight(2 * i + 2, 22)
             self.layer_checks.append(chk)
             self.layer_gain.append(gain)
+            self.layer_factor.append(factor)
             self.layer_denoise.append(den)
+        form.addRow(table)
         reset = QPushButton("Réinitialiser les couches")
         reset.clicked.connect(self._reset_wavelets)
         form.addRow(reset)
-        form.addRow(hint("Couches 1-2 : détails fins (et bruit). Couches 3-4 : structures moyennes. "
-                         "Couches 5-6 : grandes structures. Commencez par la couche 2 ou 3."))
+        form.addRow(hint("Accentuation de 0 (image intacte) à 100. Couches 1-2 : détails fins (et "
+                         "bruit). Couches 3-4 : structures moyennes. Couches 5-6 : grandes structures. "
+                         "Commencez vers 30 à 50 sur les couches 1 à 3."))
         lay.addWidget(box)
         lay.addStretch(1)
         return w
@@ -1041,6 +1059,11 @@ class MainWindow(QMainWindow):
         for chk, gain, den in zip(self.layer_checks, self.layer_gain, self.layer_denoise):
             gain.setEnabled(chk.isChecked())
             den.setEnabled(chk.isChecked())
+        self._on_gain_changed()
+
+    def _on_gain_changed(self) -> None:
+        for label, layer in zip(self.layer_factor, self.settings.wavelet.layers):
+            label.setText(f"×{layer.gain:.1f}".replace(".", ","))
         self._request_preview()
 
     def _reset_wavelets(self) -> None:
@@ -1214,7 +1237,7 @@ class MainWindow(QMainWindow):
             f"1. Ouvrez une vidéo SER ou AVI ({CMD}+O, ou glisser-déposer).\n"
             "2. Cliquez sur « Tout faire » (F5) : analyse de la qualité, image de référence, "
             "points d'alignement, alignement, sélection et empilement.\n"
-            "3. Onglet Ondelettes : montez le gain des couches 1 à 3 pour faire ressortir les détails, "
+            "3. Onglet Ondelettes : montez l'accentuation des couches 1 à 3 (30 à 50 pour commencer), "
             "et utilisez le débruitage des couches 1-2 si le bruit apparaît.\n"
             "4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux.\n"
             f"5. Enregistrez ({CMD}+S) en TIFF 16 bits.\n\n"
@@ -1240,7 +1263,7 @@ class MainWindow(QMainWindow):
         if self._busy():
             return
         from .mosaic import MosaicDialog
-        dlg = MosaicDialog(self.qsettings, self.load_image, self)
+        dlg = MosaicDialog(self.qsettings, self.load_image, lambda: self.settings, self)
         dlg.exec()
         dlg.deleteLater()
 

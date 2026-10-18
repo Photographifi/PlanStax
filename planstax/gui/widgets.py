@@ -15,7 +15,8 @@ class ValueSlider(QWidget):
     valueChanged = Signal(float)
 
     def __init__(self, minimum: float, maximum: float, step: float, value: float,
-                 decimals: int = 2, parent=None) -> None:
+                 decimals: int = 2, parent=None, spin_beside: bool = True) -> None:
+        """`spin_beside=False`: the spin box is left for the caller to place (self.spin)."""
         super().__init__(parent)
         self._min, self._max, self._step = minimum, maximum, step
         lay = QHBoxLayout(self)
@@ -29,7 +30,8 @@ class ValueSlider(QWidget):
         self.spin.setKeyboardTracking(False)
         self.spin.setFixedWidth(72)
         lay.addWidget(self.slider, 1)
-        lay.addWidget(self.spin)
+        if spin_beside:
+            lay.addWidget(self.spin)
         self.slider.valueChanged.connect(self._from_slider)
         self.spin.valueChanged.connect(self._from_spin)
         self.setValue(value)

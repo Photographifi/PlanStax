@@ -173,6 +173,23 @@ def test_wavelets_identity_and_sharpening():
         assert lap(sharp) > lap(img) * 1.5
 
 
+def test_wavelet_sliders_spread_the_strength_over_the_layers():
+    from planstax.core.wavelets import MAX_EXTRA, amount_from_gain, decompose, gain_from_amount
+    for j in range(6):
+        assert gain_from_amount(j, 0) == 1.0 and gain_from_amount(j, 100) == 1.0 + MAX_EXTRA[j]
+        for a in (0.0, 12.5, 50.0, 99.5):
+            assert amount_from_gain(j, gain_from_amount(j, a)) == pytest.approx(a)
+    assert amount_from_gain(0, 33.3) == pytest.approx(63.5, abs=0.1)  # existing presets keep their gain
+    assert amount_from_gain(2, 0.5) == 0.0 and amount_from_gain(2, 500.0) == 100.0
+    # The same position adds detail of comparable strength from one layer to the next (within
+    # a factor of 4), where the same gain added 30 times more on layer 6 than on layer 1.
+    frames, _, _ = make_sequence(make_planet(320), n=20, seed=1)
+    layers, _ = decompose(np.mean(frames, axis=0).astype(np.float32), WaveletSettings())
+    rms = np.array([np.sqrt(np.mean(l ** 2)) for l in layers])
+    added = np.array([(gain_from_amount(j, 50) - 1.0) * rms[j] for j in range(6)])
+    assert added.max() / added.min() < 4.0 and rms[5] / rms[0] > 10
+
+
 def test_wavelets_denoise_reduces_noise():
     rng = np.random.default_rng(0)
     clean = make_planet(128)

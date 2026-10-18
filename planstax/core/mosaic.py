@@ -10,8 +10,10 @@ possibly a scale: a similarity, without the perspective corrections of wide-angl
    the matched points, so errors do not pile up along a chain; a pair that disagrees with
    the others is dropped. Images that overlap nothing are left aside, and disjoint sets of
    images become separate mosaics.
-3. Brightness: a gain per image and channel equalises the overlaps (sky transparency and
-   the height of the Moon change during a session).
+3. Brightness and colour: a smooth gain map per image and channel equalises the overlaps
+   (exposure and white balance of each video, sky transparency, vignetting). With finishing
+   settings, wavelets go to each image and levels/colours to the blended mosaic, so that a
+   white point cannot clip the sky of one image and not of its neighbour.
 4. Blending in two bands: brightness (low frequencies) is feathered across the whole
    overlap while fine detail switches over over a narrow seam, which hides the seams
    without blurring. The mosaic is rendered in horizontal bands, so its size is not
@@ -20,6 +22,7 @@ possibly a scale: a similarity, without the perspective corrections of wide-angl
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import os
 import threading
@@ -46,6 +49,9 @@ MIN_OVERLAP = 0.02        # of the smaller image
 DUPLICATE_OVERLAP = 0.9   # of both images
 POINTS_PER_PAIR = 150     # matched points per pair kept for the global solution
 MAX_RESIDUAL = 3.0        # px: a pair that disagrees more with the others is dropped
+GAIN_GRID = 6             # nodes per side of the residual brightness/colour map of an image
+GAIN_DETAIL = 25          # nodes per side of the final gain map (vignetting included)
+PHOTO_SAMPLES = 800       # brightness samples per overlap
 MAX_PIXELS = 1.5e9
 MAX_SIDE = 65000          # JPEG and most viewers stop there
 IN_MEMORY_PIXELS = 64e6   # larger TIFF mosaics are written tile by tile
@@ -337,52 +343,163 @@ def _residual(p: _Pair, poses: dict[int, np.ndarray]) -> float:
     return float(np.sqrt(np.mean(np.sum(d * d, axis=1))))
 
 
-def _gains(nodes: list[int], pairs: list[_Pair], tiles: dict[int, _Tile],
-           poses: dict[int, np.ndarray], channels: int) -> dict[int, np.ndarray]:
-    """One gain per image and channel so that overlaps match (least squares, pulled
-    towards 1 so that the whole mosaic keeps its brightness)."""
-    sigma_n, sigma_g = 0.02, 0.1  # relative brightness noise of an overlap, spread of the gains
-    index = {k: n for n, k in enumerate(nodes)}
-    a = np.zeros((channels, len(nodes), len(nodes)))
-    b = np.zeros((channels, len(nodes)))
+def _grid_weights(pts: np.ndarray, width: int, height: int, first: int):
+    """Columns and weights of the bilinear interpolation of GAIN_GRID² nodes (numbered from
+    `first`) spread over an image of width × height, at points pts (n, 2)."""
+    G = GAIN_GRID
+    gx = np.clip(pts[:, 0] * ((G - 1) / max(1, width - 1)), 0.0, G - 1 - 1e-9)
+    gy = np.clip(pts[:, 1] * ((G - 1) / max(1, height - 1)), 0.0, G - 1 - 1e-9)
+    ix, iy = gx.astype(int), gy.astype(int)
+    fx, fy = gx - ix, gy - iy
+    node = first + iy * G + ix
+    cols = np.stack([node, node + 1, node + G, node + G + 1], axis=1)
+    weights = np.stack([(1 - fx) * (1 - fy), fx * (1 - fy), (1 - fx) * fy, fx * fy], axis=1)
+    return cols, weights
+
+
+def _cgls(cols: np.ndarray, vals: np.ndarray, b: np.ndarray, size: int, x: np.ndarray | None = None,
+          iterations: int = 80, tolerance: float = 1e-7) -> np.ndarray:
+    """Least squares min |A x - b| for a sparse A given row by row (cols, vals: (m, k)) and
+    several right-hand sides b (m, c), by conjugate gradients on the normal equations."""
+    flat_cols = cols.ravel()
+
+    def mul(v):
+        return np.einsum("mk,mkc->mc", vals, v[cols])
+
+    def mul_t(r):
+        return np.stack([np.bincount(flat_cols, weights=(vals * r[:, c, None]).ravel(), minlength=size)
+                         for c in range(r.shape[1])], axis=1)
+
+    x = np.zeros((size, b.shape[1])) if x is None else x.copy()
+    r = b - mul(x)
+    s = mul_t(r)
+    p = s.copy()
+    gamma = gamma0 = np.sum(s * s, axis=0)
+    for _ in range(iterations):
+        if np.all(gamma <= tolerance * np.maximum(gamma0, 1e-30)):
+            break
+        q = mul(p)
+        alpha = gamma / np.maximum(np.sum(q * q, axis=0), 1e-30)
+        x += alpha * p
+        r -= alpha * q
+        s = mul_t(r)
+        new = np.sum(s * s, axis=0)
+        p = s + (new / np.maximum(gamma, 1e-30)) * p
+        gamma = new
+    return x
+
+
+def _radius2(pts: np.ndarray, width: int, height: int) -> np.ndarray:
+    """Squared distance to the image centre, 1 in the corners."""
+    cx, cy = (width - 1) / 2.0, (height - 1) / 2.0
+    return ((pts[:, 0] - cx) ** 2 + (pts[:, 1] - cy) ** 2) / max(cx * cx + cy * cy, 1.0)
+
+
+def _photometry(nodes: list[int], pairs: list[_Pair], tiles: dict[int, _Tile],
+                poses: dict[int, np.ndarray], channels: int) -> dict[int, np.ndarray]:
+    """Brightness and colour correction of every image, per channel, such that the overlaps
+    match: log gain = exposure of the image (a constant) + vignetting of the optics (a·r² +
+    b·r⁴, the same for every image) + a smooth residual map (GAIN_GRID × GAIN_GRID nodes).
+
+    This takes in the exposure and white balance that change from one video to the next
+    (automatic settings, sky transparency), the vignetting — corrected up to the edges of the
+    mosaic, where no overlap could measure it image by image — and the sky gradient that moves
+    during the session: a single gain per image cannot. Solved by least squares over samples
+    of every overlap; the residual maps are smooth (their nodes that no overlap reaches follow
+    their neighbours) and kept small, and samples that disagree (boats, waves) count less.
+    Returns, for each image, its gain map on a GAIN_DETAIL² grid."""
+    G = GAIN_GRID
+    n_tiles = len(nodes)
+    first = {k: n * G * G for n, k in enumerate(nodes)}
+    expo = {k: n_tiles * G * G + n for n, k in enumerate(nodes)}  # exposure of each image
+    vig = n_tiles * G * G + n_tiles                                 # the 2 vignetting terms
+    size = vig + 2
+    rng = np.random.default_rng(0)
+    cols, vals, logs = [], [], []
     for p in pairs:
         ti, tj = tiles[p.i], tiles[p.j]
-        rel = _compose(_invert(poses[p.i]), poses[p.j])                 # j → i, full size
+        rel = _compose(_invert(poses[p.i]), poses[p.j])                 # pixel of j → pixel of i
         m = _compose(ti.small_matrix, _compose(rel, _invert(tj.small_matrix)))
         hi, wi = ti.small.shape[:2]
-        warped = cv2.warpAffine(tj.small, m, (wi, hi), flags=cv2.INTER_LINEAR)
-        warped = warped.reshape(hi, wi, -1)
+        warped = cv2.warpAffine(tj.small, m, (wi, hi), flags=cv2.INTER_LINEAR).reshape(hi, wi, -1)
         valid_j = cv2.warpAffine(_rect_mask(tj), m, (wi, hi), flags=cv2.INTER_LINEAR) > 0.99
         both = valid_j & (_rect_mask(ti) > 0)
         for img in (ti.small, warped):
-            lum = img.mean(axis=2)
-            both &= (lum > 0.03) & (img.max(axis=2) < 0.97)  # neither sky nor saturated
+            both &= (img.mean(axis=2) > 0.03) & (img.max(axis=2) < 0.97)  # neither black sky nor saturated
         both = cv2.erode(both.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
-        n = int(both.sum())
-        if n < 30:
+        ys, xs = np.nonzero(both)
+        if len(xs) < 30:
             continue
-        si = _expand(ti.small[both], channels).mean(axis=0)
-        sj = _expand(warped[both], channels).mean(axis=0)
-        u, v = index[p.i], index[p.j]
-        for c in range(channels):
-            mean = 0.5 * (si[c] + sj[c])
-            if mean <= 1e-4:
-                continue
-            w = n / (sigma_n * mean) ** 2
-            prior = n / sigma_g ** 2
-            a[c, u, u] += w * si[c] ** 2 + prior
-            a[c, v, v] += w * sj[c] ** 2 + prior
-            a[c, u, v] -= w * si[c] * sj[c]
-            a[c, v, u] -= w * si[c] * sj[c]
-            b[c, u] += prior
-            b[c, v] += prior
-    gains = np.ones((len(nodes), channels))
-    for c in range(channels):
-        diag = np.diag(a[c]) == 0
-        a[c][diag, diag] = 1.0  # images without a usable overlap keep a gain of 1
-        b[c][diag] = 1.0
-        gains[:, c] = np.clip(np.linalg.solve(a[c], b[c]), 0.5, 2.0)
-    return {k: gains[index[k]].astype(np.float32) for k in nodes}
+        if len(xs) > PHOTO_SAMPLES:  # the maps are smooth: a few hundred samples are plenty
+            keep = rng.choice(len(xs), PHOTO_SAMPLES, replace=False)
+            ys, xs = ys[keep], xs[keep]
+        pts_i = _apply(_invert(ti.small_matrix), np.stack([xs, ys], axis=1).astype(np.float64))
+        pts_j = _apply(_invert(rel), pts_i)
+        ci, wi_ = _grid_weights(pts_i, ti.width, ti.height, first[p.i])
+        cj, wj_ = _grid_weights(pts_j, tj.width, tj.height, first[p.j])
+        ri, rj = _radius2(pts_i, ti.width, ti.height), _radius2(pts_j, tj.width, tj.height)
+        count = len(xs)
+        cols.append(np.hstack([ci, cj, np.tile([expo[p.i], expo[p.j], vig, vig + 1], (count, 1))]))
+        vals.append(np.hstack([wi_, -wj_, np.ones((count, 1)), -np.ones((count, 1)),
+                               (ri - rj)[:, None], (ri * ri - rj * rj)[:, None]]))
+        si = np.maximum(_expand(ti.small[ys, xs], channels), 1e-4)
+        sj = np.maximum(_expand(warped[ys, xs], channels), 1e-4)
+        logs.append(np.log(sj) - np.log(si))  # correction_i − correction_j at these points
+    if not cols:
+        return {k: np.ones((GAIN_DETAIL, GAIN_DETAIL, channels), np.float32) for k in nodes}
+    cols, vals, logs = np.vstack(cols), np.vstack(vals), np.vstack(logs)
+    n_obs, width = cols.shape
+    # Regularisation rows, padded to the same width with zero weights. Each one weighs like
+    # the samples of its image: a sample may disagree by about sigma_match, the exposure of an
+    # image differ by about sigma_exposure. Without this bound, small systematic differences
+    # between neighbours (haze lighter when aiming higher, other software's per-image
+    # stretch…) add up from row to row and tilt the brightness of the whole mosaic.
+    sigma_match, sigma_exposure, sigma_map, sigma_smooth = 0.02, 0.15, 0.1, 0.03
+    samples = np.bincount(np.concatenate([cols[:, 8], cols[:, 9]]) - expo[nodes[0]], minlength=n_tiles)
+    reg_cols, reg_vals = [], []
+
+    def reg(c, v):
+        reg_cols.append(list(c) + [0] * (width - len(c)))
+        reg_vals.append(list(v) + [0.0] * (width - len(v)))
+
+    for n, k in enumerate(nodes):
+        per_image = math.sqrt(max(1.0, float(samples[n]))) * sigma_match
+        per_node = per_image / G
+        reg([expo[k]], [per_image / sigma_exposure])
+        for y in range(G):
+            for x in range(G):
+                node = first[k] + y * G + x
+                reg([node], [per_node / sigma_map])                    # residual maps stay small…
+                for dx, dy in ((1, 0), (0, 1)):
+                    if x + dx < G and y + dy < G:                      # …and smooth
+                        s = per_node / sigma_smooth
+                        reg([node, node + dy * G + dx], [s, -s])
+    whole = math.sqrt(n_obs) * sigma_match
+    reg([vig], [whole / 0.5])
+    reg([vig + 1], [whole / 0.5])
+    all_cols = np.vstack([cols, np.array(reg_cols)])
+    all_vals = np.vstack([vals, np.array(reg_vals)])
+    b = np.vstack([logs, np.zeros((len(reg_vals), channels))])
+    weight = np.ones(n_obs)
+    solution = None
+    for _ in range(3):  # iteratively reweighted (Huber): samples that disagree count less
+        w = np.concatenate([np.sqrt(weight), np.ones(len(reg_vals))])[:, None]
+        solution = _cgls(all_cols, all_vals * w, b * w, size, solution)
+        res = np.abs(np.einsum("mk,mkc->mc", vals, solution[cols]) - logs).mean(axis=1)
+        spread = 1.4826 * float(np.median(res)) + 1e-4
+        weight = np.minimum(1.0, 2.5 * spread / np.maximum(res, 1e-12))
+    # Each image's gain map, sampled finely enough for the radial vignetting term.
+    maps = {}
+    for k in nodes:
+        t = tiles[k]
+        gx, gy = np.meshgrid(np.linspace(0, t.width - 1, GAIN_DETAIL), np.linspace(0, t.height - 1, GAIN_DETAIL))
+        pts = np.stack([gx.ravel(), gy.ravel()], axis=1)
+        gc, gw = _grid_weights(pts, t.width, t.height, first[k])
+        r2 = _radius2(pts, t.width, t.height)[:, None]
+        log_gain = (np.einsum("nk,nkc->nc", gw, solution[gc]) + solution[expo[k]]
+                    + solution[vig] * r2 + solution[vig + 1] * r2 * r2)
+        maps[k] = np.clip(np.exp(log_gain), 0.4, 2.5).astype(np.float32).reshape(GAIN_DETAIL, GAIN_DETAIL, channels)
+    return maps
 
 
 def _rect_mask(tile: _Tile) -> np.ndarray:
@@ -407,7 +524,8 @@ class MosaicGroup:
     indices: list[int]            # positions in MosaicPlan.paths
     matrices: list[np.ndarray]    # 2×3, image pixel → mosaic pixel
     rects: list[tuple[int, int, int, int]]
-    gains: list[np.ndarray]
+    sizes: list[tuple[int, int]]  # (width, height) of each image
+    gains: list[np.ndarray]       # GAIN_DETAIL × GAIN_DETAIL × channels gain map of each image
     channels: int
     width: int
     height: int
@@ -416,6 +534,21 @@ class MosaicGroup:
     def outline(self, k: int) -> np.ndarray:
         """Corners of image k in the mosaic (4×2)."""
         return _apply(self.matrices[k], _outline(self.rects[k]))
+
+    def oriented(self, rotate: int = 0, flip_h: bool = False, flip_v: bool = False) -> "MosaicGroup":
+        """The same mosaic turned as the finishing orientation does (quarter turns clockwise,
+        then mirrors), by placing the images directly in the turned frame."""
+        W, H = self.width, self.height
+        o = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+        for _ in range((rotate // 90) % 4):
+            o = _compose(np.array([[0.0, -1.0, H - 1.0], [1.0, 0.0, 0.0]]), o)  # (x, y) → (H−1−y, x)
+            W, H = H, W
+        if flip_h:
+            o = _compose(np.array([[-1.0, 0.0, W - 1.0], [0.0, 1.0, 0.0]]), o)
+        if flip_v:
+            o = _compose(np.array([[1.0, 0.0, 0.0], [0.0, -1.0, H - 1.0]]), o)
+        return dataclasses.replace(self, matrices=[_compose(o, m) for m in self.matrices],
+                                   width=W, height=H)
 
     @property
     def pixels(self) -> int:
@@ -455,10 +588,10 @@ class MosaicPlan:
             lines.append("Aucune mosaïque : aucune image ne recouvre une autre.")
         for n, g in enumerate(self.groups):
             title = f"Mosaïque {n + 1}" if len(self.groups) > 1 else "Mosaïque"
-            spread = max(abs(float(x) - 1.0) for gain in g.gains for x in gain) * 100
+            spread = max(float(np.abs(gain - 1.0).max()) for gain in g.gains) * 100
             lines.append(f"{title} : {len(g.paths)} images, {g.width} × {g.height} px, "
                          f"écart moyen aux raccords {_fr(g.rms, 2)} px, "
-                         f"luminosité corrigée de {_fr(spread, 0)} % au plus.")
+                         f"luminosité et couleurs égalisées (corrections jusqu'à {_fr(spread, 0)} %).")
         if self.isolated:
             lines.append(f"Laissées de côté, sans recouvrement trouvé : {names(self.isolated)}. "
                          "Il faut environ 25 % de recouvrement entre voisines et assez de détails "
@@ -571,7 +704,7 @@ def plan_mosaic(paths: list[str], progress: Progress | None = None,
         members = set(g)
         gp = [p for p in pairs if p.i in members]
         channels = max(tiles[k].channels for k in g)
-        gains = _gains(g, gp, tiles, poses, channels)
+        gains = _photometry(g, gp, tiles, poses, channels)
         corners = np.vstack([_apply(poses[k], _outline(tiles[k].rect)) for k in g])
         x0, y0 = np.ceil(corners.min(axis=0))
         x1, y1 = np.floor(corners.max(axis=0))
@@ -586,6 +719,7 @@ def plan_mosaic(paths: list[str], progress: Progress | None = None,
         plan.groups.append(MosaicGroup(
             paths=[tiles[k].path for k in g], indices=list(g),
             matrices=[poses[k] + shift for k in g], rects=[tiles[k].rect for k in g],
+            sizes=[(tiles[k].width, tiles[k].height) for k in g],
             gains=[gains[k] for k in g], channels=channels, width=width, height=height, rms=rms))
         placed.update(g)
     plan.excluded.sort()
@@ -614,28 +748,52 @@ def _lowpass(img: np.ndarray, mask: np.ndarray, sigma: float, q: int) -> np.ndar
     return low
 
 
-def _edge_distance(inverse: np.ndarray, rect, scale: float, x0: int, y0: int,
-                   w: int, h: int) -> np.ndarray:
-    """Distance (mosaic pixels, 0 outside) from each pixel of the mosaic region (x0, y0, w, h)
-    to the edge of the usable part `rect` of an image placed by the inverse of `inverse`."""
-    xs = np.arange(x0, x0 + w, dtype=np.float32)
-    ys = np.arange(y0, y0 + h, dtype=np.float32)
-    rx0, ry0, rx1, ry1 = (float(v) - 0.5 for v in rect)
-    dist = None
-    for row, lo, hi in ((inverse[0], rx0, rx1), (inverse[1], ry0, ry1)):
-        # Image coordinate along this axis = a·x + b·y + c (a plane over the region).
-        along_x = (row[0] * xs + row[2]).astype(np.float32)
-        along_y = (row[1] * ys).astype(np.float32)
-        for sign, edge in ((1.0, lo), (-1.0, hi)):
-            d = sign * (along_x - edge)[None, :] + sign * along_y[:, None]
-            dist = d if dist is None else np.minimum(dist, d, out=dist)
+def _image_coords(inverse: np.ndarray, x0: int, y0: int, w: int, h: int):
+    """Coordinates (u, v), float32, in an image placed by the inverse of `inverse`, of each
+    pixel of the mosaic region (x0, y0, w, h)."""
+    xs = np.arange(x0, x0 + w, dtype=np.float64)
+    ys = np.arange(y0, y0 + h, dtype=np.float64)
+    u = (inverse[0, 0] * xs + inverse[0, 2]).astype(np.float32)[None, :] \
+        + (inverse[0, 1] * ys).astype(np.float32)[:, None]
+    v = (inverse[1, 0] * xs + inverse[1, 2]).astype(np.float32)[None, :] \
+        + (inverse[1, 1] * ys).astype(np.float32)[:, None]
+    return u, v
+
+
+def _edge_distance(u: np.ndarray, v: np.ndarray, rect, scale: float) -> np.ndarray:
+    """Distance (mosaic pixels, 0 outside) to the edge of the usable part `rect` of an image."""
+    x0, y0, x1, y1 = (np.float32(float(c) - 0.5) for c in rect)
+    dist = np.minimum(u - x0, x1 - u)
+    np.minimum(dist, v - y0, out=dist)
+    np.minimum(dist, y1 - v, out=dist)
     dist *= np.float32(scale)
     return np.maximum(dist, 0.0, out=dist)
 
 
+def _refine_grid(grid: np.ndarray, factor: int = 12) -> np.ndarray:
+    """The same bilinear gain map on a grid `factor` times finer (exactly: bilinear on a
+    sub-grid), because OpenCV's remap rounds its coordinates to 1/32 of a cell: on the coarse
+    grid that would leave faint steps in a smooth sky."""
+    G = grid.shape[0]
+    t = np.arange((G - 1) * factor + 1) / factor
+    i = np.minimum(t.astype(int), G - 2)
+    f = (t - i).astype(np.float32)
+    rows = grid[i] * (1 - f)[:, None, None] + grid[i + 1] * f[:, None, None]
+    return np.ascontiguousarray(rows[:, i] * (1 - f)[None, :, None] + rows[:, i + 1] * f[None, :, None])
+
+
+def _gain_map(u: np.ndarray, v: np.ndarray, size: tuple[int, int], fine: np.ndarray) -> np.ndarray:
+    """Gain of each pixel (u, v) of an image of `size`, from its refined gain grid."""
+    m = fine.shape[0] - 1
+    gx = u * np.float32(m / max(1, size[0] - 1))
+    gy = v * np.float32(m / max(1, size[1] - 1))
+    return cv2.remap(fine, gx, gy, cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE).reshape(u.shape + (-1,))
+
+
 def _bands(group: MosaicGroup, progress: Progress, cancel: threading.Event | None,
-           workers: int | None = None):
-    """Yield (top row, float32 band of the mosaic) from top to bottom."""
+           workers: int | None = None, prepare=None):
+    """Yield (top row, float32 band of the mosaic) from top to bottom. `prepare(samples)`,
+    if given, processes each image once when it is read (wavelets…)."""
     W, H, C = group.width, group.height, group.channels
     n = len(group.paths)
     scales = [_scale(m) for m in group.matrices]
@@ -646,6 +804,7 @@ def _bands(group: MosaicGroup, progress: Progress, cancel: threading.Event | Non
     seam = np.float32(1.0 / (0.5 * side))  # distance scale of the detail weights
     band = max(TIFF_TILE, (BAND_BYTES // (W * (2 * C + 2) * 4)) // TIFF_TILE * TIFF_TILE)
     inverse = [_invert(m) for m in group.matrices]
+    fine_gains = [_refine_grid(g) for g in group.gains]
     boxes = []
     for k in range(n):
         corners = group.outline(k)
@@ -654,6 +813,14 @@ def _bands(group: MosaicGroup, progress: Progress, cancel: threading.Event | Non
         boxes.append((max(0, x0), max(0, y0), min(W, x1), min(H, y1)))
     cache: dict[int, np.ndarray] = {}
     lock = threading.Lock()
+    heavy = threading.Semaphore(2)  # wavelets need several copies of an image: two at a time
+
+    def load(k):
+        data = _read(group.paths[k])
+        if prepare is None:
+            return data
+        with heavy:
+            return prepare(data)
 
     def contribute(k, by0, by1, ey0, ey1, acc_low, w_low, acc_high, w_high):
         bx0, bt, bx1, bb = boxes[k]
@@ -669,8 +836,10 @@ def _bands(group: MosaicGroup, progress: Progress, cancel: threading.Event | Non
                                        borderMode=cv2.BORDER_CONSTANT)).reshape(rh, rw, -1)
         if img.shape[2] < C:
             img = np.repeat(img, C, axis=2)
-        img *= group.gains[k]
-        dist = _edge_distance(inverse[k], group.rects[k], scales[k], rx0, ry0, rw, rh)
+        u, v = _image_coords(inverse[k], rx0, ry0, rw, rh)
+        img *= _gain_map(u, v, group.sizes[k], fine_gains[k])
+        dist = _edge_distance(u, v, group.rects[k], scales[k])
+        del u, v
         mask = (dist > 0).astype(np.float32)
         img *= mask[..., None]
         low = _lowpass(img, mask, sigma, q)
@@ -705,7 +874,7 @@ def _bands(group: MosaicGroup, progress: Progress, cancel: threading.Event | Non
             active = [k for k in range(n)
                       if boxes[k][3] > ey0 and boxes[k][1] < ey1 and boxes[k][2] > boxes[k][0]]
             missing = [k for k in active if k not in cache]
-            for k, data in zip(missing, pool.map(lambda k: _read(group.paths[k]), missing)):
+            for k, data in zip(missing, pool.map(load, missing)):
                 cache[k] = data
             acc_low = np.zeros((by1 - by0, W, C), np.float32)
             acc_high = np.zeros_like(acc_low)
@@ -728,9 +897,11 @@ def _bands(group: MosaicGroup, progress: Progress, cancel: threading.Event | Non
 
 
 def render_mosaic(group: MosaicGroup, path: str, bits: int = 16, progress: Progress | None = None,
-                  cancel: threading.Event | None = None, preview_size: int = PREVIEW_SIZE) -> np.ndarray:
+                  cancel: threading.Event | None = None, preview_size: int = PREVIEW_SIZE,
+                  prepare=None, finish=None) -> np.ndarray:
     """Blend the images of `group` and write the mosaic to `path` (format from its extension).
-    Returns a reduced copy for display."""
+    `prepare(samples)` processes each image before blending (wavelets), `finish(band)` the
+    blended mosaic band by band (levels, colours…). Returns a reduced copy for display."""
     report = progress or (lambda f, m: None)
     W, H = group.width, group.height
     bits = output_bits(path, bits)
@@ -740,12 +911,14 @@ def render_mosaic(group: MosaicGroup, path: str, bits: int = 16, progress: Progr
 
     def keep_preview(bands):
         for y0, band in bands:
+            if finish is not None:
+                band = finish(band)
             r0, r1 = round(y0 * sp), round((y0 + band.shape[0]) * sp)
             if r1 > r0:
                 previews.append(cv2.resize(band, (pw, r1 - r0), interpolation=cv2.INTER_AREA))
             yield y0, band
 
-    bands = keep_preview(_bands(group, report, cancel))
+    bands = keep_preview(_bands(group, report, cancel, prepare=prepare))
     # Written under a temporary name: a cancelled or failed assembly (disk full…) leaves neither
     # a half-written file nor a damaged previous mosaic.
     root, ext = os.path.splitext(path)

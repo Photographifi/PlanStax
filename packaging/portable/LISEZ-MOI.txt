@@ -14,8 +14,8 @@ INSTALLATION (rien à installer)
 UTILISATION EN 5 ÉTAPES
   1. Ctrl+O : ouvrir une vidéo SER ou AVI (ou la glisser dans la fenêtre).
   2. F5 « Tout faire » : alignement, sélection des meilleures images, empilement.
-  3. Onglet Ondelettes : monter le gain des couches 1 à 3 pour faire ressortir
-     les détails ; un peu de débruitage sur les couches 1-2 si le bruit apparaît.
+  3. Onglet Ondelettes : monter l'accentuation des couches 1 à 3 (30 à 50 pour
+     commencer) ; un peu de débruitage sur les couches 1-2 si le bruit apparaît.
   4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux.
   5. Ctrl+S : enregistrer (TIFF 16 bits conseillé).
 
@@ -31,6 +31,8 @@ PLUSIEURS VIDÉOS D'UN COUP (traitement par lot)
 MOSAÏQUE (Lune, Soleil, paysage pris en plusieurs champs)
   Cochez « Assembler les images en une mosaïque » dans la fenêtre du traitement par
   lot : à la fin, les images qui se recouvrent sont assemblées dans output\mosaique.tif.
+  Les ondelettes sont appliquées image par image, les niveaux et les couleurs une seule
+  fois, à la mosaïque entière : pas de zones différentes dans le ciel.
   Pour des images déjà faites : Fichier > Assembler une mosaïque (Ctrl+M).
   Prévoyez environ 25 % de recouvrement entre champs voisins.
 

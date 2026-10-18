@@ -17,6 +17,7 @@ from ..batch import FORMATS, MosaicResult, list_images, make_mosaics
 from ..core import Cancelled
 from ..io import IMAGE_EXTENSIONS
 from ..paths import default_batch_folders
+from ..settings import list_presets, load_preset
 from .imageview import to_qimage
 
 COL_NAME, COL_SIZE, COL_STATE = range(3)
@@ -31,7 +32,7 @@ def _image_filter() -> str:
 def preview_pixmap(result: MosaicResult, index: int = 0, width: int = 0) -> QPixmap:
     """The reduced mosaic with the outline and number of every image."""
     img = result.previews[index]
-    group = result.plan.groups[index]
+    group = result.groups[index]
     pix = QPixmap.fromImage(to_qimage(img))
     if width and pix.width() > width:
         pix = pix.scaledToWidth(width, Qt.TransformationMode.SmoothTransformation)
@@ -57,16 +58,17 @@ class MosaicWorker(QThread):
     failed = Signal(str)
 
     def __init__(self, paths: list[str], out_dir: str, fmt: str, bits: int, suffix: str,
-                 parent=None) -> None:
+                 settings=None, parent=None) -> None:
         super().__init__(parent)
         self.paths, self.out_dir, self.fmt, self.bits, self.suffix = paths, out_dir, fmt, bits, suffix
+        self.settings = settings
         self.cancel_event = threading.Event()
 
     def run(self) -> None:
         try:
             result = make_mosaics(self.paths, self.out_dir, self.fmt, self.bits, suffix=self.suffix,
                                   progress=lambda f, m: self.progressed.emit(float(f), str(m)),
-                                  cancel=self.cancel_event)
+                                  cancel=self.cancel_event, settings=self.settings)
         except Cancelled:
             return
         except MemoryError:
@@ -79,14 +81,16 @@ class MosaicWorker(QThread):
 
 
 class MosaicDialog(QDialog):
-    """`open_image(path)` loads a finished mosaic into the main window (for the wavelets)."""
+    """`open_image(path)` loads a finished mosaic into the main window (for the wavelets);
+    `current_settings()` returns the main window's settings."""
 
-    def __init__(self, qsettings: QSettings, open_image=None, parent=None) -> None:
+    def __init__(self, qsettings: QSettings, open_image=None, current_settings=None, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Assembler une mosaïque")
         self.resize(980, 640)
         self.qs = qsettings
         self._open_image = open_image
+        self._current_settings = current_settings
         self.worker: MosaicWorker | None = None
         self.result: MosaicResult | None = None
         self._paths: list[str] = []
@@ -110,9 +114,21 @@ class MosaicDialog(QDialog):
         for label, ext, bits in FORMATS:
             self.format_combo.addItem(label, (ext, bits))
         self.format_combo.setCurrentIndex(max(0, int(self.qs.value("mosaic/format", 0))))
+        self.process_combo = QComboBox()
+        self.process_combo.addItem("Aucun : assembler les images telles quelles", "")
+        if current_settings is not None:
+            self.process_combo.addItem("Ondelettes et finitions des réglages actuels", "*")
+        for name in list_presets():
+            self.process_combo.addItem(f"Ondelettes et finitions du préréglage « {name} »", name)
+        self.process_combo.setCurrentIndex(max(0, self.process_combo.findData(self.qs.value("mosaic/process", ""))))
+        self.process_combo.setToolTip(
+            "Pour des empilements bruts : les ondelettes sont appliquées à chaque image, les niveaux\n"
+            "et les couleurs une seule fois, à la mosaïque entière (un ciel brûlé dans une image et\n"
+            "pas dans sa voisine laisserait des zones visibles).")
         form = QFormLayout()
         form.addRow("Images à assembler :", row)
         form.addRow("", self.raw_check)
+        form.addRow("Traitement :", self.process_combo)
         form.addRow("Format :", self.format_combo)
 
         self.table = QTableWidget(0, 3)
@@ -169,7 +185,7 @@ class MosaicDialog(QDialog):
         lay.addWidget(self.report)
         lay.addWidget(self.progress)
         lay.addLayout(buttons)
-        self._inputs = [self.folder_edit, browse, pick, self.raw_check, self.format_combo]
+        self._inputs = [self.folder_edit, browse, pick, self.raw_check, self.process_combo, self.format_combo]
         self.folder_edit.editingFinished.connect(self._folder_mode)
         self.refresh()
 
@@ -225,12 +241,16 @@ class MosaicDialog(QDialog):
         if len(self._paths) < 2:
             return
         ext, bits = self.format_combo.currentData()
+        settings = self._processing()
+        if settings is False:
+            return
         self._save_choices()
         self.result = None
         self.open_btn.setEnabled(False)
         self.report.clear()
-        suffix = "_brut" if self._chosen is None and self.raw_check.isChecked() else ""
-        self.worker = MosaicWorker(self._paths, self.out_dir(), ext, bits, suffix, self)
+        raw = self._chosen is None and self.raw_check.isChecked()
+        suffix = "_brut" if raw and settings is None else ""
+        self.worker = MosaicWorker(self._paths, self.out_dir(), ext, bits, suffix, settings, self)
         self.worker.progressed.connect(self._on_progress)
         self.worker.done.connect(self._on_done)
         self.worker.failed.connect(self._on_failed)
@@ -240,6 +260,19 @@ class MosaicDialog(QDialog):
         self.start_btn.setEnabled(False)
         self.cancel_btn.setEnabled(True)
         self.worker.start()
+
+    def _processing(self):
+        """Settings to apply (None: the images as they are; False: unreadable preset)."""
+        choice = self.process_combo.currentData()
+        if not choice:
+            return None
+        if choice == "*":
+            return self._current_settings().copy()
+        try:
+            return load_preset(choice)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.critical(self, self.windowTitle(), f"Préréglage illisible :\n{exc}")
+            return False
 
     def _on_progress(self, fraction: float, message: str) -> None:
         self.progress.setValue(int(fraction * 1000))
@@ -254,13 +287,17 @@ class MosaicDialog(QDialog):
         if result.outputs:
             text += "\n" + "\n".join(f"Enregistrée : {p}" for p in result.outputs)
             self._show_preview()
-            group = plan.groups[0]
-            self.open_btn.setEnabled(self._open_image is not None and group.pixels <= OPEN_LIMIT)
+            group = result.groups[0]
+            processed = self.worker is not None and self.worker.settings is not None
+            # A mosaic that already has its wavelets would get them a second time.
+            self.open_btn.setEnabled(self._open_image is not None and group.pixels <= OPEN_LIMIT
+                                     and not processed)
             if group.pixels > OPEN_LIMIT:
                 text += (f"\nMosaïque de {group.pixels / 1e6:.0f} Mpx : trop grande pour appliquer les "
                          "ondelettes dans PlanStax (mémoire).")
                 if self.worker is not None and self.worker.suffix:
-                    text += " Assemblez plutôt les images traitées (ondelettes appliquées vidéo par vidéo)."
+                    text += (" Choisissez plutôt un traitement dans la liste « Traitement » : les "
+                             "ondelettes seront appliquées image par image.")
         self.report.setPlainText(text)
         self.progress.setValue(1000)
         self.progress.setFormat(f"Terminé en {result.seconds:.0f} s" if result.outputs else "Aucune mosaïque")
@@ -312,6 +349,7 @@ class MosaicDialog(QDialog):
     def _save_choices(self) -> None:
         self.qs.setValue("mosaic/folder", self.folder_edit.text().strip())
         self.qs.setValue("mosaic/raw", self.raw_check.isChecked())
+        self.qs.setValue("mosaic/process", self.process_combo.currentData())
         self.qs.setValue("mosaic/format", self.format_combo.currentIndex())
         self.qs.sync()
 

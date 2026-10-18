@@ -56,7 +56,10 @@ def test_full_workflow(app, window, tmp_path):
     assert win.stacked is not None and win.stacked.shape == (200, 200, 3)
     assert "images empilées" in win.stack_label.text()
 
-    win.layer_gain[0].spin.setValue(3.0)
+    from planstax.core.wavelets import gain_from_amount
+    win.layer_gain[0].spin.setValue(40.0)
+    assert win.settings.wavelet.layers[0].gain == pytest.approx(gain_from_amount(0, 40.0))
+    assert win.layer_factor[0].text() == f"×{gain_from_amount(0, 40.0):.1f}".replace(".", ",")
     _wait(app, win, extra=1.0)
     assert win.final is not None
     assert np.abs(win.final - win.stacked).max() > 0.01

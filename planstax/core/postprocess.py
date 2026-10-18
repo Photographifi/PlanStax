@@ -68,6 +68,17 @@ def apply_post(img: np.ndarray, p: PostSettings) -> np.ndarray:
     orientation."""
     if p.is_neutral():
         return img
+    return orient(apply_tone(img, p), p)
+
+
+def has_tone(p: PostSettings) -> bool:
+    return ((p.gain_r, p.gain_g, p.gain_b) != (1.0, 1.0, 1.0) or p.black != 0.0 or p.white != 1.0
+            or p.gamma != 1.0 or p.contrast != 1.0 or p.brightness != 0.0 or p.saturation != 1.0)
+
+
+def apply_tone(img: np.ndarray, p: PostSettings) -> np.ndarray:
+    """The pixel-by-pixel part of the finishing (balance, levels, gamma, brightness/contrast,
+    saturation): it can be applied to a mosaic band by band."""
     out = img.astype(np.float32, copy=True)
     if out.ndim == 3 and (p.gain_r, p.gain_g, p.gain_b) != (1.0, 1.0, 1.0):
         out *= np.array([p.gain_r, p.gain_g, p.gain_b], dtype=np.float32)
@@ -81,8 +92,7 @@ def apply_post(img: np.ndarray, p: PostSettings) -> np.ndarray:
     if out.ndim == 3 and p.saturation != 1.0:
         grey = cv2.cvtColor(np.clip(out, 0, 1).astype(np.float32), cv2.COLOR_RGB2GRAY)[..., None]
         out = grey + (out - grey) * p.saturation
-    out = np.clip(out, 0.0, 1.0)
-    return orient(out, p)
+    return np.clip(out, 0.0, 1.0)
 
 
 def orient(img: np.ndarray, p: PostSettings) -> np.ndarray:

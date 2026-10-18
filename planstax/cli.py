@@ -4,8 +4,8 @@ Examples:
     planstax-cli stack capture.ser -p Mak2 -o resultat.tif
     planstax-cli stack "D:/Jupiter/*.ser" -p Mak2 --wavelets
     planstax-cli batch D:/Captures D:/Images -p Mak2
-    planstax-cli batch D:/Lune D:/Lune/images --raw-only --mosaic
-    planstax-cli mosaic D:/Lune/images -o D:/Lune/lune.tif
+    planstax-cli batch D:/Lune D:/Lune/images -p Mak2 --mosaic
+    planstax-cli mosaic D:/Lune/images --brut -p Mak2 -o D:/Lune/lune.tif
     planstax-cli wavelets empile.tif -p Mak3
     planstax-cli presets --import-registax "C:/Program Files (x86)/RegiStax 6"
     planstax-cli demo demo.ser
@@ -137,18 +137,19 @@ def cmd_batch(args) -> int:
     if opts.mosaic:
         from .batch import mosaic_sources, mosaic_suffix
         if _mosaic(mosaic_sources(videos, out_dir, opts), out_dir, opts.fmt, opts.bits,
-                   suffix=mosaic_suffix(opts), workers=args.workers) is None:
+                   suffix=mosaic_suffix(opts), workers=args.workers,
+                   settings=settings if opts.save_final else None) is None:
             return 130
     return 1 if errors else 0
 
 
 def _mosaic(paths: list[str], out_dir: str, fmt: str, bits: int, name: str | None = None,
-            suffix: str = "", workers: int | None = None):
+            suffix: str = "", workers: int | None = None, settings: Settings | None = None):
     from .batch import MOSAIC_NAME, make_mosaics
     print(f"Mosaïque de {len(paths)} image(s)")
     try:
         result = make_mosaics(paths, out_dir, fmt, bits, name or MOSAIC_NAME, suffix,
-                              _progress, workers=workers)
+                              _progress, workers=workers, settings=settings)
     except Cancelled:
         return None
     print("\n" + result.plan.explain())
@@ -165,13 +166,14 @@ def cmd_mosaic(args) -> int:
     else:
         paths = _expand(args.inputs)
         folder = os.path.dirname(os.path.abspath(paths[0])) if paths else "."
-    fmt, name, suffix = args.format, None, "_brut" if args.brut else ""
+    settings = load_preset(args.preset) if args.preset else None
+    fmt, name, suffix = args.format, None, "_brut" if args.brut and settings is None else ""
     out_dir = args.output or folder
     if args.output and os.path.splitext(args.output)[1] and not os.path.isdir(args.output):
         out_dir = os.path.dirname(os.path.abspath(args.output))
         name, ext = os.path.splitext(os.path.basename(args.output))
         fmt, suffix = ext[1:].lower(), ""  # the name asked for, as is
-    result = _mosaic(paths, out_dir, fmt, args.bits, name, suffix, args.workers)
+    result = _mosaic(paths, out_dir, fmt, args.bits, name, suffix, args.workers, settings)
     if result is None:
         return 130
     return 0 if result.outputs else 1
@@ -255,8 +257,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--raw-only", action="store_true",
                     help="n'enregistrer que l'empilement brut (sans ondelettes ni finitions)")
     sp.add_argument("--mosaic", action="store_true",
-                    help="assembler les images obtenues en mosaïque (les empilements bruts avec "
-                         "--raw-only, pour appliquer ensuite les ondelettes à la mosaïque entière)")
+                    help="assembler les images en mosaïque, à partir des empilements bruts "
+                         "(enregistrés aussi) : ondelettes image par image, niveaux et couleurs "
+                         "sur la mosaïque entière (avec --raw-only : mosaïque brute)")
     sp.add_argument("--workers", type=int, help="nombre de fils de calcul")
     sp.set_defaults(func=cmd_batch)
 
@@ -268,6 +271,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("-b", "--bits", type=int, default=16, choices=[8, 16, 32])
     sp.add_argument("--brut", action="store_true",
                     help="dans un dossier, assembler les empilements bruts (« _brut »)")
+    sp.add_argument("-p", "--preset",
+                    help="appliquer les ondelettes et finitions d'un préréglage (images brutes) : "
+                         "ondelettes image par image, niveaux et couleurs sur la mosaïque entière")
     sp.add_argument("--workers", type=int, help="nombre de fils de calcul")
     sp.set_defaults(func=cmd_mosaic)
 

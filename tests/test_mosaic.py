@@ -62,6 +62,60 @@ def test_mosaic_places_every_field(tmp_path, moon):
     assert err.mean() < 0.01 and np.percentile(err, 99) < 0.04  # brightness equalised, no seams
 
 
+def test_finishing_applies_to_the_whole_mosaic(tmp_path):
+    """A hazy sky above a landscape; exposure, colour cast and vignetting differ from field to
+    field. A white point applied to each image would clip the sky of the brighter ones only;
+    applied to the evened-out mosaic, the sky stays one smooth gradient."""
+    from planstax.core.postprocess import apply_post
+    from planstax.settings import Settings
+    h = w = 900
+    land = make_moon(h, w, seed=8, limb=False)
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    sky_rows = yy < 320
+    scene = np.where(sky_rows, 0.70 + 0.05 * xx / w + 0.03 * yy / 320, land)
+    rgb = np.dstack([scene, scene * 0.95, scene * 0.9]).astype(np.float32)
+    tiles, truths = cut_tiles(rgb, 420, 240, seed=5, gain=0.15, colour=0.05, vignetting=0.15)
+    settings = Settings()
+    settings.post.white = 0.8
+    raw_dir, final_dir = tmp_path / "bruts", tmp_path / "finales"
+    raw_dir.mkdir()
+    final_dir.mkdir()
+    good = make_mosaics(_write(raw_dir, tiles), str(raw_dir), settings=settings, auto_rgb=False)
+    naive = make_mosaics(_write(final_dir, [apply_post(t, settings.post) for t in tiles]), str(final_dir))
+
+    def sky_roughness(result):
+        """Departure of the sky from a smooth (quadratic) surface: zones, seams, clipped patches."""
+        g = result.groups[0]
+        mosaic = read_image(result.outputs[0])
+        to_mosaic = mz._compose(g.matrices[0], mz._invert(truths[g.indices[0]]))
+        sky = cv2.warpAffine((yy < 300).astype(np.float32), to_mosaic, (g.width, g.height)) > 0.99
+        sky &= cv2.erode((mosaic.min(axis=2) > 0).astype(np.uint8), np.ones((31, 31), np.uint8)) > 0
+        y, x = np.nonzero(sky)
+        basis = np.stack([np.ones_like(x), x, y, x * x, x * y, y * y], axis=1).astype(float) / [1, w, w, w * w, w * w, w * w]
+        values = cv2.GaussianBlur(mosaic, (0, 0), 4.0)[sky]  # without the noise of the fields
+        fit = basis @ np.linalg.lstsq(basis, values, rcond=None)[0]
+        return float(np.percentile(np.abs(values - fit), 99))
+
+    good_sky, naive_sky = sky_roughness(good), sky_roughness(naive)
+    if os.environ.get("PLANSTAX_KEEP"):
+        shutil.copy(good.outputs[0], os.path.join(os.environ["PLANSTAX_KEEP"], "ciel_bon.tif"))
+        shutil.copy(naive.outputs[0], os.path.join(os.environ["PLANSTAX_KEEP"], "ciel_naif.tif"))
+    assert good_sky < 0.012, good_sky
+    assert naive_sky > 3 * good_sky, (good_sky, naive_sky)
+
+
+def test_orientation_is_applied_to_the_placement(tmp_path, moon):
+    _, tiles, _ = moon
+    g = plan_mosaic(_write(tmp_path, tiles[:2])).groups[0]
+    render_mosaic(g, str(tmp_path / "droite.tif"))
+    turned = g.oriented(90, flip_h=True)
+    assert (turned.width, turned.height) == (g.height, g.width)
+    render_mosaic(turned, str(tmp_path / "tournee.tif"))
+    expected = np.rot90(read_image(str(tmp_path / "droite.tif")), -1)[:, ::-1]
+    diff = np.abs(read_image(str(tmp_path / "tournee.tif")) - expected)
+    assert diff.mean() < 1e-3 and diff.max() < 0.02
+
+
 def test_bands_and_tiled_tiff_give_the_same_mosaic(tmp_path, moon, monkeypatch):
     _, tiles, _ = moon
     plan = plan_mosaic(_write(tmp_path, [tiles[k] for k in (0, 1, 3, 4)]))
@@ -192,7 +246,11 @@ def test_mosaic_dialog(tmp_path, moon):
     opened = []
     qs = QSettings(str(tmp_path / "ui.ini"), QSettings.Format.IniFormat)
     qs.setValue("mosaic/folder", str(tmp_path))
-    dlg = MosaicDialog(qs, opened.append)
+    from planstax.settings import Settings
+    sharp = Settings()
+    sharp.wavelet.layers[1].gain = 4.0
+    sharp.post.white = 0.9
+    dlg = MosaicDialog(qs, opened.append, lambda: sharp)
     dlg.show()
     assert dlg.table.rowCount() == 4 and dlg.start_btn.isEnabled()
     dlg.start()
@@ -202,6 +260,17 @@ def test_mosaic_dialog(tmp_path, moon):
     assert dlg.preview.pixmap() is not None and not dlg.preview.pixmap().isNull()
     assert "Mosaïque : 4 images" in dlg.report.toPlainText()
     assert dlg.open_btn.isEnabled()
+    plain = read_image(str(tmp_path / "mosaique.tif"))
+    # The same images with the wavelets and finishing of the current settings.
+    dlg.process_combo.setCurrentIndex(dlg.process_combo.findData("*"))
+    dlg.start()
+    _wait(app, dlg)
+    processed = read_image(str(tmp_path / "mosaique.tif"))
+    assert processed.shape == plain.shape and np.abs(processed - plain).mean() > 0.01
+    assert not dlg.open_btn.isEnabled()  # its wavelets would be applied twice
+    dlg.process_combo.setCurrentIndex(0)
+    dlg.start()
+    _wait(app, dlg)
     dlg._open_result()
     assert opened == [str(tmp_path / "mosaique.tif")]
     dlg.refresh()
@@ -224,9 +293,12 @@ def test_batch_dialog_mosaic(tmp_path, moon_videos):
     dlg = BatchDialog(lambda: Settings(), qs)
     dlg.show()
     assert dlg.mosaic_check.isChecked()
+    assert dlg.raw_check.isChecked() and not dlg.raw_check.isEnabled()  # the mosaic needs them
     dlg.start()
     _wait(app, dlg)
     assert os.path.isfile(os.path.join(out, "mosaique.tif"))
+    assert sorted(f for f in os.listdir(out) if f.endswith("_brut.tif")) == [
+        f"lune_{k}_brut.tif" for k in range(1, 5)]
     assert "Mosaïque : mosaique.tif (4 images)" in dlg.summary.text()
     assert dlg.mosaic_report.isVisibleTo(dlg) and "4 images" in dlg.mosaic_report.toPlainText()
     # Everything is done: the button stays available to assemble the mosaic again.
@@ -234,4 +306,6 @@ def test_batch_dialog_mosaic(tmp_path, moon_videos):
     assert dlg.start_btn.isEnabled()
     dlg.mosaic_check.setChecked(False)
     assert not dlg.start_btn.isEnabled()
+    assert not dlg.raw_check.isChecked() and dlg.raw_check.isEnabled()  # back to the user's choice
     dlg.reject()
+    assert str(QSettings(str(tmp_path / "ui.ini"), QSettings.Format.IniFormat).value("batch/raw")).lower() == "false"

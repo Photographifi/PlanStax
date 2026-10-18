@@ -17,6 +17,23 @@ from ..settings import WaveletSettings
 _B3 = np.array([1.0, 4.0, 6.0, 4.0, 1.0], dtype=np.float32) / 16.0
 N_LAYERS = 6
 
+# Sliders: an accentuation from 0 (untouched) to 100, turned into the gain of the layer by
+# gain = 1 + MAX_EXTRA[layer]·(amount/100)². The layers of a stack grow with their scale
+# (layer 6 commonly 10 to 30 times layer 1), so a gain that barely shows on layer 1 overwhelms
+# the coarse layers: each layer gets its own range, and the square keeps fine control near 0.
+MAX_EXTRA = (80.0, 40.0, 16.0, 6.0, 3.0, 1.5)
+
+
+def gain_from_amount(layer: int, amount: float) -> float:
+    """Gain of layer `layer` (0-based) for a slider accentuation of 0–100."""
+    a = min(max(float(amount), 0.0), 100.0) / 100.0
+    return 1.0 + MAX_EXTRA[layer] * a * a
+
+
+def amount_from_gain(layer: int, gain: float) -> float:
+    """Slider position (0–100) showing a gain; below 1 shows 0, beyond the range 100."""
+    return 100.0 * min(1.0, max(float(gain) - 1.0, 0.0) / MAX_EXTRA[layer]) ** 0.5
+
 
 def layer_scale(settings: WaveletSettings, j: int) -> float:
     """Scale (in pixels) of layer j (1-based)."""

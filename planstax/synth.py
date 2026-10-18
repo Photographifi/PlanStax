@@ -98,12 +98,16 @@ def make_moon(height: int = 1200, width: int = 1200, seed: int = 5, limb: bool =
 
 
 def cut_tiles(scene: np.ndarray, size: int, step: int, seed: int = 0, rotation: float = 2.0,
-              gain: float = 0.12, noise: float = 0.005):
+              gain: float = 0.12, noise: float = 0.005, colour: float = 0.0, vignetting: float = 0.0):
     """Overlapping fields of `scene` on a grid, as a mosaic session would record them: each
-    with a random shift, field rotation (degrees), brightness and noise. Returns the tiles
+    with a random shift, field rotation (degrees), brightness, colour cast (per-channel
+    spread, colour scenes), vignetting (darkening of the corners) and noise. Returns the tiles
     and, for each, the 2×3 matrix tile pixel → scene pixel."""
     rng = np.random.default_rng(seed)
     h, w = scene.shape[:2]
+    yy, xx = np.mgrid[0:size, 0:size].astype(np.float32)
+    r2 = ((xx - (size - 1) / 2) ** 2 + (yy - (size - 1) / 2) ** 2) / (2 * ((size - 1) / 2) ** 2)
+    shade = (1.0 - vignetting * r2)[..., None] if scene.ndim == 3 else 1.0 - vignetting * r2
     tiles, truths = [], []
     for y in range(0, h - size + 1, step):
         for x in range(0, w - size + 1, step):
@@ -116,7 +120,9 @@ def cut_tiles(scene: np.ndarray, size: int, step: int, seed: int = 0, rotation: 
                           [s, c, cy - (s * half + c * half)]])  # tile pixel → scene pixel
             tile = cv2.warpAffine(scene, m, (size, size), flags=cv2.INTER_CUBIC | cv2.WARP_INVERSE_MAP,
                                   borderMode=cv2.BORDER_REFLECT)
-            tile = tile * rng.uniform(1.0 - gain, 1.0 + gain)
+            tile = tile * rng.uniform(1.0 - gain, 1.0 + gain) * shade
+            if scene.ndim == 3 and colour:
+                tile = tile * rng.uniform(1.0 - colour, 1.0 + colour, 3).astype(np.float32)
             tile = tile + rng.normal(0, noise, tile.shape).astype(np.float32)
             tiles.append(np.clip(tile, 0.0, 1.0).astype(np.float32))
             truths.append(m)

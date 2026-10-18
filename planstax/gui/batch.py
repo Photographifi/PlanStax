@@ -6,7 +6,7 @@ import os
 import threading
 import traceback
 
-from PySide6.QtCore import QFileSystemWatcher, QSettings, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QFileSystemWatcher, QSettings, QSignalBlocker, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog,
                                QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
@@ -70,7 +70,9 @@ class BatchWorker(QThread):
             result = make_mosaics(paths, self.out_dir, self.opts.fmt, self.opts.bits,
                                   suffix=mosaic_suffix(self.opts),
                                   progress=lambda f, m: self.mosaicProgress.emit(float(f), str(m)),
-                                  cancel=self.cancel_event)
+                                  cancel=self.cancel_event,
+                                  settings=self.settings if self.opts.save_final else None,
+                                  auto_rgb=self.opts.auto_rgb)
         except Cancelled:
             return
         except MemoryError:
@@ -124,8 +126,9 @@ class BatchDialog(QDialog):
         self.mosaic_check = QCheckBox("Assembler les images en une mosaïque (Lune, Soleil, paysage…)")
         self.mosaic_check.setToolTip(
             "À la fin du lot, les images qui se recouvrent sont assemblées dans « mosaique.tif ».\n"
-            "Images traitées si elles sont enregistrées, sinon empilements bruts (« mosaique_brut.tif »,\n"
-            "auquel appliquer ensuite les ondelettes avec Fichier → Ouvrir une image à traiter).")
+            "La mosaïque part des empilements bruts (enregistrés aussi) : les ondelettes sont appliquées\n"
+            "image par image, mais les niveaux et les couleurs une seule fois, à la mosaïque entière,\n"
+            "après égalisation : un ciel n'est pas brûlé dans une image et pas dans sa voisine.")
         for chk, key, default in ((self.final_check, "final", True), (self.raw_check, "raw", False),
                                   (self.rgb_check, "rgb", True), (self.skip_check, "skip", True),
                                   (self.mosaic_check, "mosaic", False)):
@@ -137,6 +140,10 @@ class BatchDialog(QDialog):
             cl.addWidget(chk)
             chk.toggled.connect(self.refresh)
         form.addRow("Enregistrer :", checks)
+        self._raw_wanted = self.raw_check.isChecked()
+        self.raw_check.toggled.connect(self._remember_raw)
+        self.mosaic_check.toggled.connect(self._sync_raw)
+        self._sync_raw()
 
         self.table = QTableWidget(0, 3)
         self.table.setHorizontalHeaderLabels(["Vidéo", "Taille", "État"])
@@ -228,6 +235,18 @@ class BatchDialog(QDialog):
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
 
+    def _remember_raw(self, checked: bool) -> None:
+        if not self.mosaic_check.isChecked():
+            self._raw_wanted = checked
+
+    def _sync_raw(self) -> None:
+        """The mosaic is made from the raw stacks: they are saved whenever it is asked for."""
+        mosaic = self.mosaic_check.isChecked()
+        with QSignalBlocker(self.raw_check):
+            self.raw_check.setChecked(mosaic or self._raw_wanted)
+        self.raw_check.setEnabled(not mosaic and self.worker is None)
+        self.raw_check.setToolTip("Nécessaire à la mosaïque" if mosaic else "")
+
     def options(self) -> BatchOptions:
         ext, bits = self.format_combo.currentData()
         return BatchOptions(save_final=self.final_check.isChecked(), save_raw=self.raw_check.isChecked(),
@@ -295,9 +314,10 @@ class BatchDialog(QDialog):
         self.qs.setValue("batch/output", self.out_edit.text().strip())
         self.qs.setValue("batch/preset", self.preset_combo.currentData())
         self.qs.setValue("batch/format", self.format_combo.currentIndex())
-        for chk, key in ((self.final_check, "final"), (self.raw_check, "raw"),
-                         (self.rgb_check, "rgb"), (self.skip_check, "skip"), (self.mosaic_check, "mosaic")):
+        for chk, key in ((self.final_check, "final"), (self.rgb_check, "rgb"),
+                         (self.skip_check, "skip"), (self.mosaic_check, "mosaic")):
             self.qs.setValue(f"batch/{key}", chk.isChecked())
+        self.qs.setValue("batch/raw", self._raw_wanted)  # not the box ticked because of the mosaic
         self.qs.sync()
 
     def start(self) -> None:
@@ -399,6 +419,7 @@ class BatchDialog(QDialog):
         self.worker = None
         for w in self._inputs:
             w.setEnabled(True)
+        self._sync_raw()
         self.cancel_btn.setEnabled(False)
         self.current.setValue(0)
         self.current.setFormat("")

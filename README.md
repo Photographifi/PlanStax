@@ -76,8 +76,11 @@ py -3.12 -m venv .venv
    dans la fenêtre).
 2. **F5 « Tout faire »** : analyse de la qualité, image de référence, points d'alignement,
    alignement, sélection et empilement.
-3. Onglet **Ondelettes** : augmentez le gain des couches 1 à 3 pour faire ressortir les détails,
-   et ajoutez un peu de débruitage sur les couches 1-2 si le bruit apparaît.
+3. Onglet **Ondelettes** : augmentez l'accentuation des couches 1 à 3 pour faire ressortir les
+   détails (30 à 50 pour commencer), et ajoutez un peu de débruitage sur les couches 1-2 si le
+   bruit apparaît. L'accentuation va de 0 (image intacte) à 100, avec une plage adaptée à chaque
+   couche : un même réglage donne un effet comparable de la couche 1 à la couche 6. Le gain
+   réellement appliqué est affiché à côté (×33,3…), et c'est lui qu'enregistrent les préréglages.
 4. Onglet **Finitions** : alignement RVB automatique, balance des couleurs, niveaux, orientation.
 5. **Ctrl+S** : enregistrer, de préférence en TIFF 16 bits.
 
@@ -120,19 +123,28 @@ recouvrent. PlanStax assemble ensuite les images obtenues :
 
 Il n'y a rien à régler. Les images sont reconnues et placées automatiquement, quel que soit
 l'ordre de prise de vue. La rotation de champ des montures azimutales est compensée. La
-luminosité est égalisée d'une image à l'autre (transparence du ciel, hauteur de la Lune) et les
-raccords sont fondus. Un rapport indique les images placées et celles laissées de côté, avec
-la raison : aucun recouvrement trouvé, ou même champ qu'une autre image. Si les images forment
-plusieurs ensembles sans lien entre eux, chaque ensemble donne sa propre mosaïque
-(`mosaique_1.tif`, `mosaique_2.tif`…).
+luminosité et les couleurs sont égalisées d'une image à l'autre : exposition et balance des
+blancs automatiques de l'appareil, transparence du ciel, vignetage de l'optique. Les raccords
+sont fondus. Un rapport indique les images placées et celles laissées de côté, avec la raison :
+aucun recouvrement trouvé, ou même champ qu'une autre image. Si les images forment plusieurs
+ensembles sans lien entre eux, chaque ensemble donne sa propre mosaïque (`mosaique_1.tif`,
+`mosaique_2.tif`…).
+
+**Dans le traitement par lot, la mosaïque part des empilements bruts**, enregistrés aussi
+(`_brut`). Les ondelettes sont appliquées image par image, mais les finitions (balance des
+couleurs, niveaux, gamma, contraste) une seule fois, à la mosaïque entière, après
+l'égalisation. Appliqué image par image, un point blanc brûlerait le ciel des images les plus
+claires et pas celui de leurs voisines, et laisserait des zones qu'aucune correction ne peut
+plus raccorder.
+
+Dans *Assembler une mosaïque…*, la liste **Traitement** fait de même pour des empilements
+bruts déjà enregistrés : ondelettes et finitions des réglages actuels ou d'un préréglage. On
+peut ainsi régler une image à la main, puis refaire toute la mosaïque sans réempiler les
+vidéos.
 
 Conseils :
 - prévoyez environ **25 % de recouvrement** entre champs voisins ;
-- traitez toutes les vidéos avec les mêmes réglages : c'est le cas dans un même lot ;
-- pour des ondelettes parfaitement homogènes, enregistrez seulement les empilements bruts,
-  assemblez-les (`mosaique_brut.tif`), puis appliquez les ondelettes à la mosaïque entière avec
-  *Fichier → Ouvrir une image à traiter…*. Cette méthode convient jusqu'à une cinquantaine de
-  mégapixels. Au-delà, assemblez des images déjà traitées.
+- traitez toutes les vidéos avec les mêmes réglages : c'est le cas dans un même lot.
 
 Au foyer d'un télescope, chaque champ ne couvre qu'une fraction de degré : les images se
 raccordent par simple décalage et rotation, sans les corrections de perspective des panoramas
@@ -164,8 +176,8 @@ résultat juste. Ils restent au neutre, et les positions d'origine sont affiché
 ```powershell
 .venv\Scripts\python.exe -m planstax batch                       # dossiers input → output
 .venv\Scripts\python.exe -m planstax batch D:\Captures D:\Images -p MonReglage --raw
-.venv\Scripts\python.exe -m planstax batch D:\Lune D:\Lune\images --raw-only --mosaic
-.venv\Scripts\python.exe -m planstax mosaic D:\Lune\images -o D:\Lune\lune.tif
+.venv\Scripts\python.exe -m planstax batch D:\Lune D:\Lune\images -p MonReglage --mosaic
+.venv\Scripts\python.exe -m planstax mosaic D:\Lune\images --brut -p MonReglage -o D:\Lune\lune.tif
 .venv\Scripts\python.exe -m planstax stack "D:\Captures\Jupiter\*.ser" -p MonReglage -o D:\Resultats --wavelets
 .venv\Scripts\python.exe -m planstax wavelets empilement.tif -p MonReglage
 .venv\Scripts\python.exe -m planstax presets --import-registax "C:\Program Files (x86)\RegiStax 6"
@@ -178,7 +190,8 @@ indique le résultat).
 
 Options utiles de `stack` : `--percent 50` (images gardées), `--scale 1.5` (agrandissement),
 `--bayer RGGB` (forcer la matrice), `-f png|tif|fits|jpg`, `-b 8|16|32`. `mosaic` prend un
-dossier (avec `--brut` pour ses empilements bruts) ou une liste d'images.
+dossier (avec `--brut` pour ses empilements bruts) ou une liste d'images ; `-p` y applique les
+ondelettes et finitions d'un préréglage, comme le traitement par lot.
 
 ## Formats
 
@@ -214,7 +227,11 @@ Rien n'est écrit dans `Program Files` ni dans le registre.
 - **Mosaïques** : points caractéristiques SIFT appariés entre toutes les images, vérifiés par
   RANSAC, puis placement de toutes les images à la fois par moindres carrés. Une paire en
   désaccord avec les autres (motif répétitif apparié au mauvais endroit) est écartée. La
-  luminosité est égalisée par un gain par image et par canal. Le fondu se fait en deux bandes :
+  luminosité est égalisée, canal par canal, par une carte de gain douce par image :
+  exposition de l'image, vignetage commun à toutes (mesuré dans les recouvrements, corrigé
+  jusqu'aux bords de la mosaïque) et écarts résiduels. Les échantillons en désaccord (bateaux,
+  vagues) comptent moins. Les écarts admis restent bornés, pour que de petites différences
+  systématiques entre voisines ne s'additionnent pas d'une rangée à l'autre. Le fondu se fait en deux bandes :
   la luminosité sur toute la largeur du recouvrement, les détails sur un raccord étroit. La
   mosaïque est calculée par bandes horizontales et écrite en TIFF tuilé : 56 images de
   2872 × 2872 px donnent une mosaïque de 370 Mpx en une minute et demie, avec environ 1 Go de
@@ -252,7 +269,7 @@ bibliothèque DLL trouve ses dépendances, Visual C++ compris, pour fonctionner 
 ## Développement
 
 ```powershell
-.venv\Scripts\python.exe -m pytest        # 60 tests : formats, alignement, empilement, mosaïques, lot, interface, archives
+.venv\Scripts\python.exe -m pytest        # 63 tests : formats, alignement, empilement, mosaïques, lot, interface, archives
 ```
 
 Organisation du code :
