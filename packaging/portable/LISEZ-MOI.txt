@@ -28,6 +28,12 @@ PLUSIEURS VIDÉOS D'UN COUP (traitement par lot)
   Réglez d'abord une vidéo à la main (ondelettes comprises) : le lot applique les
   réglages actuels, ou le préréglage choisi dans la fenêtre du traitement par lot.
 
+MOSAÏQUE (Lune, Soleil, paysage pris en plusieurs champs)
+  Cochez « Assembler les images en une mosaïque » dans la fenêtre du traitement par
+  lot : à la fin, les images qui se recouvrent sont assemblées dans output\mosaique.tif.
+  Pour des images déjà faites : Fichier > Assembler une mosaïque (Ctrl+M).
+  Prévoyez environ 25 % de recouvrement entre champs voisins.
+
 SI QUELQUE CHOSE NE VA PAS
   - Si Windows affiche « Windows a protégé votre ordinateur » : cliquez sur
     « Informations complémentaires » puis « Exécuter quand même ».

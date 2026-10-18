@@ -4,9 +4,12 @@ Examples:
     planstax-cli stack capture.ser -p Mak2 -o resultat.tif
     planstax-cli stack "D:/Jupiter/*.ser" -p Mak2 --wavelets
     planstax-cli batch D:/Captures D:/Images -p Mak2
+    planstax-cli batch D:/Lune D:/Lune/images --raw-only --mosaic
+    planstax-cli mosaic D:/Lune/images -o D:/Lune/lune.tif
     planstax-cli wavelets empile.tif -p Mak3
     planstax-cli presets --import-registax "C:/Program Files (x86)/RegiStax 6"
     planstax-cli demo demo.ser
+    planstax-cli demo champs-lune --mosaic
 """
 
 from __future__ import annotations
@@ -107,8 +110,8 @@ def cmd_batch(args) -> int:
     default_in, default_out = default_batch_folders()
     in_dir, out_dir = args.input or default_in, args.output or default_out
     bits = next(b for _, ext, b in FORMATS if ext == args.format)
-    opts = BatchOptions(save_raw=args.raw, fmt=args.format, bits=bits,
-                        skip_existing=not args.all)
+    opts = BatchOptions(save_final=not args.raw_only, save_raw=args.raw or args.raw_only,
+                        fmt=args.format, bits=bits, skip_existing=not args.all, mosaic=args.mosaic)
     settings = _settings(args)
     videos = list_videos(in_dir)
     print(f"Entrée : {in_dir} ({len(videos)} vidéo(s))\nSortie : {out_dir}")
@@ -131,7 +134,47 @@ def cmd_batch(args) -> int:
               f"{r.seconds:.0f} s → " + ", ".join(os.path.basename(o) for o in r.outputs))
         if not r.points:
             print("  attention : aucun point d'alignement (vérifiez Luminosité min./max.)")
+    if opts.mosaic:
+        from .batch import mosaic_sources, mosaic_suffix
+        if _mosaic(mosaic_sources(videos, out_dir, opts), out_dir, opts.fmt, opts.bits,
+                   suffix=mosaic_suffix(opts), workers=args.workers) is None:
+            return 130
     return 1 if errors else 0
+
+
+def _mosaic(paths: list[str], out_dir: str, fmt: str, bits: int, name: str | None = None,
+            suffix: str = "", workers: int | None = None):
+    from .batch import MOSAIC_NAME, make_mosaics
+    print(f"Mosaïque de {len(paths)} image(s)")
+    try:
+        result = make_mosaics(paths, out_dir, fmt, bits, name or MOSAIC_NAME, suffix,
+                              _progress, workers=workers)
+    except Cancelled:
+        return None
+    print("\n" + result.plan.explain())
+    for path in result.outputs:
+        print(f"  → {path}")
+    return result
+
+
+def cmd_mosaic(args) -> int:
+    from .batch import list_images
+    if len(args.inputs) == 1 and os.path.isdir(args.inputs[0]):
+        folder = args.inputs[0]
+        paths = list_images(folder, raw=args.brut)
+    else:
+        paths = _expand(args.inputs)
+        folder = os.path.dirname(os.path.abspath(paths[0])) if paths else "."
+    fmt, name, suffix = args.format, None, "_brut" if args.brut else ""
+    out_dir = args.output or folder
+    if args.output and os.path.splitext(args.output)[1] and not os.path.isdir(args.output):
+        out_dir = os.path.dirname(os.path.abspath(args.output))
+        name, ext = os.path.splitext(os.path.basename(args.output))
+        fmt, suffix = ext[1:].lower(), ""  # the name asked for, as is
+    result = _mosaic(paths, out_dir, fmt, args.bits, name, suffix, args.workers)
+    if result is None:
+        return 130
+    return 0 if result.outputs else 1
 
 
 def cmd_wavelets(args) -> int:
@@ -165,6 +208,14 @@ def cmd_presets(args) -> int:
 
 
 def cmd_demo(args) -> int:
+    if args.mosaic:
+        from .synth import cut_tiles, make_moon
+        os.makedirs(args.output, exist_ok=True)
+        tiles, _ = cut_tiles(make_moon(1500, 1500), 600, 450, seed=2)
+        for k, tile in enumerate(tiles):
+            save_image(os.path.join(args.output, f"lune_{k + 1}.tif"), tile)
+        print(f"{len(tiles)} champs lunaires qui se recouvrent écrits dans : {args.output}")
+        return 0
     from .synth import write_demo_ser
     write_demo_ser(args.output, n=args.frames, color=args.color)
     print(f"Vidéo de démonstration écrite : {args.output}")
@@ -201,8 +252,24 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("-f", "--format", default="tif", choices=["tif", "png", "fits", "jpg"])
     sp.add_argument("--raw", action="store_true", help="enregistrer aussi l'empilement brut")
     sp.add_argument("--all", action="store_true", help="retraiter aussi les vidéos déjà traitées")
+    sp.add_argument("--raw-only", action="store_true",
+                    help="n'enregistrer que l'empilement brut (sans ondelettes ni finitions)")
+    sp.add_argument("--mosaic", action="store_true",
+                    help="assembler les images obtenues en mosaïque (les empilements bruts avec "
+                         "--raw-only, pour appliquer ensuite les ondelettes à la mosaïque entière)")
     sp.add_argument("--workers", type=int, help="nombre de fils de calcul")
     sp.set_defaults(func=cmd_batch)
+
+    sp = sub.add_parser("mosaic", help="assembler en mosaïque des images qui se recouvrent")
+    sp.add_argument("inputs", nargs="+", help="un dossier, ou des images (jokers acceptés)")
+    sp.add_argument("-o", "--output", help="fichier ou dossier de sortie (défaut : mosaique.tif "
+                                           "dans le dossier des images)")
+    sp.add_argument("-f", "--format", default="tif", choices=["tif", "png", "fits", "jpg"])
+    sp.add_argument("-b", "--bits", type=int, default=16, choices=[8, 16, 32])
+    sp.add_argument("--brut", action="store_true",
+                    help="dans un dossier, assembler les empilements bruts (« _brut »)")
+    sp.add_argument("--workers", type=int, help="nombre de fils de calcul")
+    sp.set_defaults(func=cmd_mosaic)
 
     sp = sub.add_parser("wavelets", help="appliquer ondelettes et finitions à des images")
     common(sp)
@@ -217,6 +284,9 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("output")
     sp.add_argument("--frames", type=int, default=200)
     sp.add_argument("--color", action="store_true")
+    sp.add_argument("--mosaic", action="store_true",
+                    help="écrire plutôt, dans le dossier indiqué, 9 champs lunaires qui se "
+                         "recouvrent, pour essayer la mosaïque")
     sp.set_defaults(func=cmd_demo)
     return p
 

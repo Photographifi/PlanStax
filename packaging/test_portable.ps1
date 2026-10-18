@@ -1,10 +1,12 @@
 ﻿# Checks the portable zip the way a friend would use it: downloaded from the Internet (Mark of
 # the Web), unzipped with Windows' own "Extract all", in a folder with spaces and accents.
-# Then runs a full stacking through PlanStax.exe and starts the interface (off-screen).
+# Then runs a full stacking, a batch and a mosaic through PlanStax.exe and starts the interface
+# (off-screen).
 # Usage:  powershell -ExecutionPolicy Bypass -File packaging\test_portable.ps1
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$zipSrc = Get-ChildItem (Join-Path $root "dist") -Filter "PlanStax-*-Windows.zip" | Select-Object -First 1
+$zipSrc = Get-ChildItem (Join-Path $root "dist") -Filter "PlanStax-*-Windows.zip" |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1  # the latest build
 if (-not $zipSrc) { throw "Archive absente : lancez d'abord packaging\build_portable.py" }
 
 $t = Join-Path $env:TEMP ("Test PlanStax été " + (Get-Date -Format "HHmmss"))
@@ -45,7 +47,16 @@ $images = @(Get-ChildItem (Join-Path $app "output") -File)
 Write-Host "Lot : code $($b.ExitCode), images dans output : $($images.Name -join ', ')"
 if ($b.ExitCode -ne 0 -or $images.Count -ne 1) { throw "Traitement par lot en échec" }
 
-# 3. Interface: must still be running after 10 s (no start-up error).
+# 3. Mosaic of overlapping lunar fields.
+$fields = Join-Path $t "champs lune"
+& (Join-Path $root ".venv\Scripts\python.exe") -m planstax demo $fields --mosaic | Out-Null
+$m = Start-Process -FilePath $exe -PassThru -ArgumentList @("cli", "mosaic", "`"$fields`"")
+if (-not $m.WaitForExit(300000)) { Stop-Process -Id $m.Id -Force; throw "Mosaïque : pas de fin après 5 min" }
+$mosaic = Join-Path $fields "mosaique.tif"
+Write-Host "Mosaïque : code $($m.ExitCode), $(if (Test-Path $mosaic) { 'mosaique.tif produite' } else { 'aucun fichier' })"
+if ($m.ExitCode -ne 0 -or -not (Test-Path $mosaic)) { throw "Mosaïque en échec" }
+
+# 4. Interface: must still be running after 10 s (no start-up error).
 $env:QT_QPA_PLATFORM = "offscreen"
 $g = Start-Process -FilePath $exe -PassThru -ArgumentList @("`"$demo`"")
 Start-Sleep -Seconds 10

@@ -19,6 +19,8 @@ RegiStax et n'a aucun lien avec RegiStax ni avec son auteur.
 - Alignement global et multipoints, sélection des meilleures images (globale et locale), empilement, agrandissement 1,5×–3×.
 - Ondelettes à 6 couches (gain et débruitage par couche), alignement RVB, balance des couleurs, niveaux.
 - Traitement par lot : toutes les vidéos d'un dossier « input » → une image par vidéo dans « output ».
+- Mosaïques : les images qui se recouvrent (Lune, Soleil, paysage pris en plusieurs champs) sont
+  assemblées automatiquement en une seule, même de plusieurs centaines de mégapixels.
 - Import des réglages RegiStax 6 (points d'alignement, sélection).
 - Formats : SER, AVI, MP4, FITS, TIFF, PNG ; sortie TIFF/PNG 16 bits, FITS, JPEG.
 
@@ -104,6 +106,38 @@ Options :
 Les dossiers se changent avec « Parcourir… », et le choix est mémorisé. Une vidéo en erreur
 (capture interrompue…) est signalée sans arrêter les autres.
 
+## Mosaïques (Lune, Soleil, paysages)
+
+![Fenêtre « Assembler une mosaïque »](docs/images/mosaique.png)
+
+Quand un sujet ne tient pas dans le champ de la caméra, on le filme en plusieurs vidéos qui se
+recouvrent. PlanStax assemble ensuite les images obtenues :
+
+- **dans le traitement par lot**, cochez « Assembler les images en une mosaïque » : à la fin du
+  lot, les images sont assemblées dans `output\mosaique.tif` ;
+- **pour des images déjà faites**, y compris avec un autre logiciel : *Fichier → Assembler une
+  mosaïque…* (**Ctrl+M**), choisissez le dossier ou les images, puis **Assembler**.
+
+Il n'y a rien à régler. Les images sont reconnues et placées automatiquement, quel que soit
+l'ordre de prise de vue. La rotation de champ des montures azimutales est compensée. La
+luminosité est égalisée d'une image à l'autre (transparence du ciel, hauteur de la Lune) et les
+raccords sont fondus. Un rapport indique les images placées et celles laissées de côté, avec
+la raison : aucun recouvrement trouvé, ou même champ qu'une autre image. Si les images forment
+plusieurs ensembles sans lien entre eux, chaque ensemble donne sa propre mosaïque
+(`mosaique_1.tif`, `mosaique_2.tif`…).
+
+Conseils :
+- prévoyez environ **25 % de recouvrement** entre champs voisins ;
+- traitez toutes les vidéos avec les mêmes réglages : c'est le cas dans un même lot ;
+- pour des ondelettes parfaitement homogènes, enregistrez seulement les empilements bruts,
+  assemblez-les (`mosaique_brut.tif`), puis appliquez les ondelettes à la mosaïque entière avec
+  *Fichier → Ouvrir une image à traiter…*. Cette méthode convient jusqu'à une cinquantaine de
+  mégapixels. Au-delà, assemblez des images déjà traitées.
+
+Au foyer d'un télescope, chaque champ ne couvre qu'une fraction de degré : les images se
+raccordent par simple décalage et rotation, sans les corrections de perspective des panoramas
+au grand-angle. Celles-ci ne sont pas prises en charge.
+
 ## Correspondance avec RegiStax 6
 
 | RegiStax 6 | PlanStax |
@@ -130,17 +164,21 @@ résultat juste. Ils restent au neutre, et les positions d'origine sont affiché
 ```powershell
 .venv\Scripts\python.exe -m planstax batch                       # dossiers input → output
 .venv\Scripts\python.exe -m planstax batch D:\Captures D:\Images -p MonReglage --raw
+.venv\Scripts\python.exe -m planstax batch D:\Lune D:\Lune\images --raw-only --mosaic
+.venv\Scripts\python.exe -m planstax mosaic D:\Lune\images -o D:\Lune\lune.tif
 .venv\Scripts\python.exe -m planstax stack "D:\Captures\Jupiter\*.ser" -p MonReglage -o D:\Resultats --wavelets
 .venv\Scripts\python.exe -m planstax wavelets empilement.tif -p MonReglage
 .venv\Scripts\python.exe -m planstax presets --import-registax "C:\Program Files (x86)\RegiStax 6"
 .venv\Scripts\python.exe -m planstax demo essai.ser --color
+.venv\Scripts\python.exe -m planstax demo champs-lune --mosaic   # 9 champs pour essayer la mosaïque
 ```
 
 Dans la version portable : `PlanStax.exe cli batch …` (sans console : seul le code de retour
 indique le résultat).
 
 Options utiles de `stack` : `--percent 50` (images gardées), `--scale 1.5` (agrandissement),
-`--bayer RGGB` (forcer la matrice), `-f png|tif|fits|jpg`, `-b 8|16|32`.
+`--bayer RGGB` (forcer la matrice), `-f png|tif|fits|jpg`, `-b 8|16|32`. `mosaic` prend un
+dossier (avec `--brut` pour ses empilements bruts) ou une liste d'images.
 
 ## Formats
 
@@ -173,6 +211,14 @@ Rien n'est écrit dans `Program Files` ni dans le registre.
   mer qui bouge). Il n'est pas trompé par la trame de compression des vidéos MP4/AVI.
 - **Sélection locale** (onglet 3) : chaque zone peut garder ses propres meilleures images.
   À 100 %, les mêmes images servent partout, comme dans RegiStax.
+- **Mosaïques** : points caractéristiques SIFT appariés entre toutes les images, vérifiés par
+  RANSAC, puis placement de toutes les images à la fois par moindres carrés. Une paire en
+  désaccord avec les autres (motif répétitif apparié au mauvais endroit) est écartée. La
+  luminosité est égalisée par un gain par image et par canal. Le fondu se fait en deux bandes :
+  la luminosité sur toute la largeur du recouvrement, les détails sur un raccord étroit. La
+  mosaïque est calculée par bandes horizontales et écrite en TIFF tuilé : 56 images de
+  2872 × 2872 px donnent une mosaïque de 370 Mpx en une minute et demie, avec environ 1 Go de
+  mémoire.
 - **Affichage** : adapté à la mise à l'échelle de Windows (125 %, 150 %…), avec des thèmes
   sombre, clair et « nuit » rouge qui préserve la vision nocturne.
 
@@ -185,8 +231,8 @@ powershell -ExecutionPolicy Bypass -File packaging\test_portable.ps1
 
 Le premier script produit `dist\PlanStax-<version>-Windows.zip` (environ 90 Mo). Le second le
 vérifie dans les conditions d'un utilisateur : archive marquée comme téléchargée, décompressée
-avec l'outil de Windows dans un dossier accentué, empilement complet, traitement par lot et
-démarrage de l'interface.
+avec l'outil de Windows dans un dossier accentué, empilement complet, traitement par lot,
+mosaïque et démarrage de l'interface.
 
 **Pourquoi Windows ne bloque pas ce `.exe`.** `PlanStax.exe` est l'interpréteur Python officiel
 (`pythonw.exe`), simplement renommé. Il garde donc sa signature numérique de la Python Software
@@ -206,15 +252,15 @@ bibliothèque DLL trouve ses dépendances, Visual C++ compris, pour fonctionner 
 ## Développement
 
 ```powershell
-.venv\Scripts\python.exe -m pytest        # 49 tests : formats, alignement, empilement, lot, interface, archives
+.venv\Scripts\python.exe -m pytest        # 60 tests : formats, alignement, empilement, mosaïques, lot, interface, archives
 ```
 
 Organisation du code :
 - `planstax\io` : lecture et écriture SER, FITS, images et vidéos ;
-- `planstax\core` : qualité, alignement global et local, empilement, ondelettes, finitions ;
+- `planstax\core` : qualité, alignement global et local, empilement, ondelettes, finitions, mosaïques ;
 - `planstax\gui` : l'interface Qt ;
 - `planstax\batch.py`, `planstax\cli.py` : traitement par lot et ligne de commande ;
-- `planstax\synth.py` : génération de vidéos artificielles pour les tests ;
+- `planstax\synth.py` : génération de vidéos et de champs lunaires artificiels pour les tests ;
 - `packaging\` : fabrication et test de la version portable.
 
 ## Limites connues

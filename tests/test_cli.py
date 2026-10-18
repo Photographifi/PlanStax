@@ -1,8 +1,14 @@
 import os
 
-from planstax.cli import main
+from planstax.__main__ import CLI_COMMANDS
+from planstax.cli import build_parser, main
 from planstax.io import read_image
 from planstax.synth import write_demo_ser
+
+
+def test_every_command_is_routed_to_the_cli():
+    sub = next(a for a in build_parser()._actions if a.dest == "command")
+    assert set(sub.choices) <= CLI_COMMANDS  # otherwise `python -m planstax <command>` opens the GUI
 
 
 def test_cli_stack_into_new_folder(tmp_path, monkeypatch):

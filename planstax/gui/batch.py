@@ -10,10 +10,11 @@ from PySide6.QtCore import QFileSystemWatcher, QSettings, Qt, QThread, QTimer, Q
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog,
                                QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-                               QMessageBox, QProgressBar, QPushButton, QTableWidget,
+                               QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QTableWidget,
                                QTableWidgetItem, QVBoxLayout, QWidget)
 
-from ..batch import FORMATS, BatchOptions, is_done, list_videos, process_video
+from ..batch import (FORMATS, BatchOptions, is_done, list_videos, make_mosaics, mosaic_sources,
+                     mosaic_suffix, process_video)
 from ..core import Cancelled
 from ..paths import default_batch_folders
 from ..settings import Settings, list_presets, load_preset
@@ -26,11 +27,16 @@ class BatchWorker(QThread):
     fileProgress = Signal(int, float, str)
     fileDone = Signal(int, object)
     fileFailed = Signal(int, str)
+    mosaicStarted = Signal(int)
+    mosaicProgress = Signal(float, str)
+    mosaicDone = Signal(object)
+    mosaicFailed = Signal(str)
 
     def __init__(self, jobs: list[tuple[int, str]], settings: Settings, out_dir: str,
-                 opts: BatchOptions, parent=None) -> None:
+                 opts: BatchOptions, videos: list[str] | None = None, parent=None) -> None:
         super().__init__(parent)
         self.jobs, self.settings, self.out_dir, self.opts = jobs, settings, out_dir, opts
+        self.videos = videos if videos is not None else [p for _, p in jobs]
         self.cancel_event = threading.Event()
 
     def run(self) -> None:
@@ -51,6 +57,29 @@ class BatchWorker(QThread):
                 self.fileFailed.emit(row, str(exc) or type(exc).__name__)
             else:
                 self.fileDone.emit(row, result)
+        if self.opts.mosaic and not self.cancel_event.is_set():
+            self._mosaic()
+
+    def _mosaic(self) -> None:
+        paths = mosaic_sources(self.videos, self.out_dir, self.opts)
+        self.mosaicStarted.emit(len(paths))
+        if len(paths) < 2:
+            self.mosaicFailed.emit("il faut au moins deux images")
+            return
+        try:
+            result = make_mosaics(paths, self.out_dir, self.opts.fmt, self.opts.bits,
+                                  suffix=mosaic_suffix(self.opts),
+                                  progress=lambda f, m: self.mosaicProgress.emit(float(f), str(m)),
+                                  cancel=self.cancel_event)
+        except Cancelled:
+            return
+        except MemoryError:
+            self.mosaicFailed.emit("mémoire insuffisante")
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            self.mosaicFailed.emit(str(exc) or type(exc).__name__)
+        else:
+            self.mosaicDone.emit(result)
 
 
 class BatchDialog(QDialog):
@@ -65,7 +94,9 @@ class BatchDialog(QDialog):
         self.qs = qsettings
         self.worker: BatchWorker | None = None
         self._paths: list[str] = []
-        self._done = self._failed = self._total = 0
+        self._done = self._failed = self._total = self._videos = self._mosaic_finished = 0
+        self._in_mosaic = False
+        self._mosaic_text = ""
 
         default_in, default_out = default_batch_folders()
         self.in_edit = QLineEdit(str(self.qs.value("batch/input", default_in)))
@@ -90,13 +121,19 @@ class BatchDialog(QDialog):
         self.raw_check = QCheckBox("Empilement brut (suffixe « _brut »)")
         self.rgb_check = QCheckBox("Alignement RVB automatique pour chaque vidéo couleur")
         self.skip_check = QCheckBox("Ignorer les vidéos déjà traitées")
+        self.mosaic_check = QCheckBox("Assembler les images en une mosaïque (Lune, Soleil, paysage…)")
+        self.mosaic_check.setToolTip(
+            "À la fin du lot, les images qui se recouvrent sont assemblées dans « mosaique.tif ».\n"
+            "Images traitées si elles sont enregistrées, sinon empilements bruts (« mosaique_brut.tif »,\n"
+            "auquel appliquer ensuite les ondelettes avec Fichier → Ouvrir une image à traiter).")
         for chk, key, default in ((self.final_check, "final", True), (self.raw_check, "raw", False),
-                                  (self.rgb_check, "rgb", True), (self.skip_check, "skip", True)):
+                                  (self.rgb_check, "rgb", True), (self.skip_check, "skip", True),
+                                  (self.mosaic_check, "mosaic", False)):
             chk.setChecked(str(self.qs.value(f"batch/{key}", default)).lower() == "true")
         checks = QWidget()
         cl = QVBoxLayout(checks)
         cl.setContentsMargins(0, 0, 0, 0)
-        for chk in (self.final_check, self.raw_check, self.rgb_check, self.skip_check):
+        for chk in (self.final_check, self.raw_check, self.rgb_check, self.skip_check, self.mosaic_check):
             cl.addWidget(chk)
             chk.toggled.connect(self.refresh)
         form.addRow("Enregistrer :", checks)
@@ -112,6 +149,10 @@ class BatchDialog(QDialog):
         hh.setSectionResizeMode(COL_STATE, QHeaderView.ResizeMode.Stretch)
 
         self.summary = QLabel("")
+        self.mosaic_report = QPlainTextEdit()
+        self.mosaic_report.setReadOnly(True)
+        self.mosaic_report.setMaximumHeight(90)
+        self.mosaic_report.hide()
         self.overall = QProgressBar()
         self.overall.setRange(0, 1000)
         self.current = QProgressBar()
@@ -142,11 +183,13 @@ class BatchDialog(QDialog):
         lay.addLayout(form)
         lay.addWidget(self.table, 1)
         lay.addWidget(self.summary)
+        lay.addWidget(self.mosaic_report)
         lay.addWidget(self.current)
         lay.addWidget(self.overall)
         lay.addLayout(buttons)
         self._inputs = [self.in_edit, self.out_edit, self.preset_combo, self.format_combo,
-                        self.final_check, self.raw_check, self.rgb_check, self.skip_check]
+                        self.final_check, self.raw_check, self.rgb_check, self.skip_check,
+                        self.mosaic_check]
 
         # Refresh the list when videos are dropped into the input folder.
         self.watcher = QFileSystemWatcher(self)
@@ -189,7 +232,14 @@ class BatchDialog(QDialog):
         ext, bits = self.format_combo.currentData()
         return BatchOptions(save_final=self.final_check.isChecked(), save_raw=self.raw_check.isChecked(),
                             fmt=ext, bits=bits, auto_rgb=self.rgb_check.isChecked(),
-                            skip_existing=self.skip_check.isChecked())
+                            skip_existing=self.skip_check.isChecked(),
+                            mosaic=self.mosaic_check.isChecked())
+
+    def _can_start(self, todo: int, opts: BatchOptions) -> bool:
+        """Videos to process, or only the mosaic of images already made."""
+        if not (opts.save_final or opts.save_raw):
+            return False
+        return todo > 0 or (opts.mosaic and len(mosaic_sources(self._paths, self.out_edit.text().strip(), opts)) >= 2)
 
     def _set_state(self, row: int, text: str) -> None:
         item = self.table.item(row, COL_STATE)
@@ -225,8 +275,9 @@ class BatchDialog(QDialog):
         elif not self._paths:
             self.summary.setText("Aucune vidéo (SER, AVI…) dans ce dossier : déposez-y vos captures.")
         else:
-            self.summary.setText(f"{len(self._paths)} vidéo(s), dont {todo} à traiter.")
-        self.start_btn.setEnabled(todo > 0 and (opts.save_final or opts.save_raw))
+            self.summary.setText(f"{len(self._paths)} vidéo(s), dont {todo} à traiter."
+                                 + (" Puis assemblage de la mosaïque." if opts.mosaic else ""))
+        self.start_btn.setEnabled(self._can_start(todo, opts))
 
     # ------------------------------------------------------------------ run
     def _settings(self) -> Settings | None:
@@ -245,7 +296,7 @@ class BatchDialog(QDialog):
         self.qs.setValue("batch/preset", self.preset_combo.currentData())
         self.qs.setValue("batch/format", self.format_combo.currentIndex())
         for chk, key in ((self.final_check, "final"), (self.raw_check, "raw"),
-                         (self.rgb_check, "rgb"), (self.skip_check, "skip")):
+                         (self.rgb_check, "rgb"), (self.skip_check, "skip"), (self.mosaic_check, "mosaic")):
             self.qs.setValue(f"batch/{key}", chk.isChecked())
         self.qs.sync()
 
@@ -263,17 +314,25 @@ class BatchDialog(QDialog):
         opts = self.options()
         jobs = [(row, p) for row, p in enumerate(self._paths)
                 if not (opts.skip_existing and is_done(p, out_dir, opts))]
-        if not jobs:
+        if not self._can_start(len(jobs), opts):
             return
         self._save_choices()
-        self._total, self._done, self._failed = len(jobs), 0, 0
+        self._videos, self._done, self._failed = len(jobs), 0, 0
+        self._total = len(jobs) + opts.mosaic
+        self._mosaic_finished, self._in_mosaic, self._mosaic_text = 0, False, ""
+        self.mosaic_report.clear()
+        self.mosaic_report.hide()
         for row, _ in jobs:
             self._set_state(row, "En attente")
-        self.worker = BatchWorker(jobs, settings, out_dir, opts, self)
+        self.worker = BatchWorker(jobs, settings, out_dir, opts, list(self._paths), parent=self)
         self.worker.fileStarted.connect(lambda r: self._set_state(r, "En cours…"))
         self.worker.fileProgress.connect(self._on_progress)
         self.worker.fileDone.connect(self._on_done)
         self.worker.fileFailed.connect(self._on_failed)
+        self.worker.mosaicStarted.connect(self._on_mosaic_started)
+        self.worker.mosaicProgress.connect(self._on_mosaic_progress)
+        self.worker.mosaicDone.connect(self._on_mosaic_done)
+        self.worker.mosaicFailed.connect(self._on_mosaic_failed)
         self.worker.finished.connect(self._on_finished)
         for w in self._inputs:
             w.setEnabled(False)
@@ -284,9 +343,34 @@ class BatchDialog(QDialog):
         self.worker.start()
 
     def _update_overall(self, current_fraction: float) -> None:
-        finished = self._done + self._failed
+        finished = self._done + self._failed + self._mosaic_finished
         self.overall.setValue(int(1000 * (finished + current_fraction) / max(self._total, 1)))
-        self.overall.setFormat(f"Vidéo {min(finished + 1, self._total)} / {self._total}")
+        self.overall.setFormat("Mosaïque" if self._in_mosaic else
+                               f"Vidéo {min(self._done + self._failed + 1, self._videos)} / {self._videos}")
+
+    def _on_mosaic_started(self, count: int) -> None:
+        self._in_mosaic = True
+        self.current.setValue(0)
+        self.current.setFormat(f"Mosaïque de {count} image(s)")
+        self._update_overall(0.0)
+
+    def _on_mosaic_progress(self, fraction: float, message: str) -> None:
+        self.current.setValue(int(fraction * 1000))
+        self.current.setFormat(message)
+        self._update_overall(fraction)
+
+    def _on_mosaic_done(self, result) -> None:
+        self._mosaic_finished = 1
+        self._mosaic_text = "Mosaïque : " + result.summary()
+        self.mosaic_report.setPlainText(
+            "\n".join([result.plan.explain()] + [f"Enregistrée : {p}" for p in result.outputs]))
+        self.mosaic_report.show()
+
+    def _on_mosaic_failed(self, message: str) -> None:
+        self._mosaic_finished = 1
+        self._mosaic_text = f"Mosaïque impossible : {message}"
+        self.mosaic_report.setPlainText(self._mosaic_text)
+        self.mosaic_report.show()
 
     def _on_progress(self, row: int, fraction: float, message: str) -> None:
         self.current.setValue(int(fraction * 1000))
@@ -321,8 +405,11 @@ class BatchDialog(QDialog):
         text = f"Terminé : {self._done} image(s) produite(s)"
         if self._failed:
             text += f", {self._failed} vidéo(s) en erreur"
+        if self._mosaic_text:
+            text += ". " + self._mosaic_text
         if cancelled:
             text = "Traitement annulé. " + text
+        self._in_mosaic = False
         self.overall.setFormat(text)
         if not cancelled:
             self.overall.setValue(1000)
@@ -330,7 +417,7 @@ class BatchDialog(QDialog):
         opts = self.options()
         out_dir = self.out_edit.text().strip()
         remaining = sum(not (opts.skip_existing and is_done(p, out_dir, opts)) for p in self._paths)
-        self.start_btn.setEnabled(remaining > 0)
+        self.start_btn.setEnabled(self._can_start(remaining, opts))
         self.summary.setText(text + ".")
 
     def cancel(self) -> None:

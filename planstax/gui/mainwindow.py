@@ -31,6 +31,8 @@ from .workers import PreviewWorker, Task
 TAB_ALIGN, TAB_SELECT, TAB_STACK, TAB_WAVELETS, TAB_POST = range(5)
 # Qt turns the Ctrl of shortcuts and modifier clicks into the Command key on macOS: say so in texts.
 CMD = "⌘" if sys.platform == "darwin" else "Ctrl"
+# ⌘M minimises the window on macOS.
+MOSAIC_KEY, MOSAIC_KEY_TEXT = ("Ctrl+Shift+M", "⇧⌘M") if sys.platform == "darwin" else ("Ctrl+M", "Ctrl+M")
 
 def _file_filter(label: str, extensions) -> str:
     # Both cases: file dialogs match patterns case-sensitively on Linux (P1006397.MP4, JUPITER.SER).
@@ -168,6 +170,8 @@ class MainWindow(QMainWindow):
                                 "Ouvrir une image déjà empilée pour les ondelettes")
         self.act_batch = act("Traitement par lot…", self.open_batch, "Ctrl+L",
                              "Traiter toutes les vidéos du dossier « input » : une image par vidéo dans « output »")
+        self.act_mosaic = act("Assembler une mosaïque…", self.open_mosaic, MOSAIC_KEY,
+                              "Assembler en une seule image des images qui se recouvrent (Lune, Soleil, paysage)")
         self.act_save = act("Enregistrer l'image…", self.save_final, "Ctrl+S",
                             "Enregistrer le résultat (ondelettes et finitions comprises)")
         self.act_save_raw = act("Enregistrer l'empilement brut…", self.save_stacked, "Ctrl+Shift+S",
@@ -185,7 +189,7 @@ class MainWindow(QMainWindow):
 
         mb = self.menuBar()
         m = mb.addMenu("&Fichier")
-        for a in (self.act_open, self.act_open_img, self.act_batch):
+        for a in (self.act_open, self.act_open_img, self.act_batch, self.act_mosaic):
             m.addAction(a)
         m.addSeparator()
         m.addAction(self.act_save)
@@ -222,6 +226,7 @@ class MainWindow(QMainWindow):
         tb.addAction(self.act_doall)
         tb.addAction(self.act_save)
         tb.addAction(self.act_batch)
+        tb.addAction(self.act_mosaic)
         tb.addSeparator()
         tb.addAction(self.act_before)
         tb.addSeparator()
@@ -1182,6 +1187,7 @@ class MainWindow(QMainWindow):
         self.act_open.setEnabled(not busy)
         self.act_open_img.setEnabled(not busy)
         self.act_batch.setEnabled(not busy)
+        self.act_mosaic.setEnabled(not busy)
         self.act_save.setEnabled(has_img and not busy)
         self.act_save_raw.setEnabled(has_img and not busy)
         self.bayer_combo.setEnabled(has_src and not busy)
@@ -1214,6 +1220,9 @@ class MainWindow(QMainWindow):
             f"5. Enregistrez ({CMD}+S) en TIFF 16 bits.\n\n"
             "Plusieurs vidéos : déposez-les dans le dossier « input », puis Fichier → Traitement "
             f"par lot ({CMD}+L). Une image par vidéo est écrite dans le dossier « output ».\n\n"
+            "Mosaïque (Lune, Soleil, paysage pris en plusieurs champs) : cochez « Assembler les "
+            f"images en une mosaïque » dans le traitement par lot, ou Fichier → Assembler une mosaïque "
+            f"({MOSAIC_KEY_TEXT}). Prévoyez environ 25 % de recouvrement entre champs voisins.\n\n"
             f"Pour affiner : réglez les points dans l'onglet Alignement ({CMD}+clic pour en ajouter, "
             "Maj+clic pour en retirer), le pourcentage d'images gardées dans l'onglet Sélection, "
             "et la sélection locale dans l'onglet Empilement.\n\n"
@@ -1224,6 +1233,14 @@ class MainWindow(QMainWindow):
             return
         from .batch import BatchDialog
         dlg = BatchDialog(lambda: self.settings, self.qsettings, self)
+        dlg.exec()
+        dlg.deleteLater()
+
+    def open_mosaic(self) -> None:
+        if self._busy():
+            return
+        from .mosaic import MosaicDialog
+        dlg = MosaicDialog(self.qsettings, self.load_image, self)
         dlg.exec()
         dlg.deleteLater()
 
@@ -1242,7 +1259,7 @@ class MainWindow(QMainWindow):
             "Empilement « lucky imaging » et ondelettes pour l'imagerie planétaire.<br><br>"
             "Programme indépendant écrit de zéro, inspiré du déroulement de travail de RegiStax 6 "
             "(sans lien avec RegiStax ni son auteur) : alignement multipoints, sélection des "
-            "meilleures images, empilement local, ondelettes à 6 couches.<br><br>"
+            "meilleures images, empilement local, ondelettes à 6 couches, mosaïques.<br><br>"
             "Formats : SER, AVI, FITS, TIFF, PNG, JPEG.<br>Licence MIT. Copyright Bernard Allouche"))
 
     def closeEvent(self, event) -> None:

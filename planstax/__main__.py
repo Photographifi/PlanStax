@@ -1,6 +1,6 @@
 import sys
 
-CLI_COMMANDS = {"stack", "batch", "wavelets", "presets", "demo", "-h", "--help", "--version"}
+CLI_COMMANDS = {"stack", "batch", "mosaic", "wavelets", "presets", "demo", "-h", "--help", "--version"}
 
 
 def main() -> int:

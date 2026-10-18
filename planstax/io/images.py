@@ -77,20 +77,30 @@ def read_image(path: str) -> np.ndarray:
 def save_image(path: str, image: np.ndarray, bits: int = 16) -> None:
     """Save a float [0, 1] image. TIFF/PNG use `bits` (8 or 16), FITS keeps 32-bit float
     when bits == 32, JPEG is always 8-bit."""
-    ext = _ext(path)
     img = np.clip(np.nan_to_num(image.astype(np.float32)), 0.0, 1.0)
-    if ext in (".jpg", ".jpeg", ".bmp"):
-        bits = 8
-
-    if ext in FITS_EXTENSIONS:
-        if bits == 32:
-            write_fits(path, img)
-        else:
-            write_fits(path, _quantize(img, bits))
+    bits = output_bits(path, bits)
+    if bits == 32:
+        write_fits(path, img)
         return
-    if bits not in (8, 16):
-        bits = 16
-    data = _quantize(img, bits)
+    write_samples(path, quantize(img, bits))
+
+
+def output_bits(path: str, bits: int) -> int:
+    """Sample size actually written for `bits`: JPEG/BMP are 8-bit, only FITS keeps 32-bit float."""
+    ext = _ext(path)
+    if ext in (".jpg", ".jpeg", ".bmp"):
+        return 8
+    if ext in FITS_EXTENSIONS and bits == 32:
+        return 32
+    return bits if bits in (8, 16) else 16
+
+
+def write_samples(path: str, data: np.ndarray) -> None:
+    """Write already quantized samples (uint8/uint16, RGB channel order) in the format of `path`."""
+    ext = _ext(path)
+    if ext in FITS_EXTENSIONS:
+        write_fits(path, data)
+        return
     if ext in (".tif", ".tiff"):
         tifffile.imwrite(path, data, photometric="rgb" if data.ndim == 3 else "minisblack",
                          compression="zlib" if data.dtype == np.uint16 else None)
@@ -104,7 +114,8 @@ def save_image(path: str, image: np.ndarray, bits: int = 16) -> None:
     buf.tofile(path)
 
 
-def _quantize(img: np.ndarray, bits: int) -> np.ndarray:
+def quantize(img: np.ndarray, bits: int) -> np.ndarray:
+    """Float [0, 1] → uint8 or uint16 samples."""
     if bits == 8:
         return (img * 255.0 + 0.5).astype(np.uint8)
     return (img * 65535.0 + 0.5).astype(np.uint16)

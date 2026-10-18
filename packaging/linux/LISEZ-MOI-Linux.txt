@@ -41,6 +41,12 @@ UTILISATION
        ./planstax.sh batch                         (dossiers input → output)
        ./planstax.sh batch ~/Captures ~/Images     (autres dossiers)
 
+  Mosaïque (Lune, Soleil, paysage pris en plusieurs champs, avec environ 25 % de
+  recouvrement) : cochez « Assembler les images en une mosaïque » dans la fenêtre du
+  traitement par lot, ou Fichier > Assembler une mosaïque (Ctrl+M). En ligne de commande :
+       ./planstax.sh batch --mosaic                (output/mosaique.tif à la fin du lot)
+       ./planstax.sh mosaic ~/Images/Lune          (images déjà faites)
+
   Réglages et préréglages : ~/.config/PlanStax
 
 EN CAS DE PROBLÈME

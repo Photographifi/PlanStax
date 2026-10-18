@@ -40,6 +40,10 @@ UTILISATION
   PlanStax.command), puis Fichier > Traitement par lot (⌘L) > Démarrer ; une image par vidéo
   est écrite dans « output ».
 
+  Mosaïque (Lune, Soleil, paysage pris en plusieurs champs, avec environ 25 % de
+  recouvrement) : cochez « Assembler les images en une mosaïque » dans la fenêtre du
+  traitement par lot, ou Fichier > Assembler une mosaïque (⇧⌘M).
+
   La fenêtre du Terminal reste ouverte pendant que PlanStax fonctionne : c'est normal, ne la
   fermez pas (vous pourrez la fermer après avoir quitté PlanStax).
 

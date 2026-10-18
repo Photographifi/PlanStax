@@ -64,6 +64,65 @@ def make_sequence(truth: np.ndarray, n: int = 60, seed: int = 0, max_shift: floa
     return frames, np.array(shifts), np.array(sigmas)
 
 
+def make_moon(height: int = 1200, width: int = 1200, seed: int = 5, limb: bool = True) -> np.ndarray:
+    """A lunar landscape lit from the side: craters of every size on rolling ground, darker
+    maria, and the limb of the disc against the black sky."""
+    rng = np.random.default_rng(seed)
+    h, w = height, width
+    relief = np.zeros((h, w), np.float32)
+    for sigma, amp in ((30.0, 40.0), (8.0, 6.0), (2.0, 0.8)):
+        relief += cv2.GaussianBlur(rng.normal(0, 1, (h, w)).astype(np.float32), (0, 0), sigma) * amp
+    for _ in range(int(h * w / 2500)):
+        r = float(min(90.0, 3.0 / rng.uniform(0.03, 1.0)))  # many small craters, a few large ones
+        cx, cy = rng.uniform(0, w), rng.uniform(0, h)
+        x0, x1 = int(max(0, cx - 1.6 * r)), int(min(w, cx + 1.6 * r + 1))
+        y0, y1 = int(max(0, cy - 1.6 * r)), int(min(h, cy + 1.6 * r + 1))
+        if x1 <= x0 or y1 <= y0:
+            continue
+        yy, xx = np.mgrid[y0:y1, x0:x1].astype(np.float32)
+        d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) / r
+        bowl = np.where(d < 1.0, (d * d - 1.0) * 0.35 * r, 0.0)
+        rim = np.exp(-((d - 1.0) / 0.18) ** 2) * 0.12 * r
+        relief[y0:y1, x0:x1] += (bowl + rim).astype(np.float32)
+    gy, gx = np.gradient(relief)
+    shade = 0.55 + 0.4 * np.tanh(0.6 * (0.8 * gx + 0.45 * gy))
+    maria = cv2.GaussianBlur(rng.normal(0, 1, (h, w)).astype(np.float32), (0, 0), min(h, w) / 8)
+    albedo = 0.8 - 0.25 * (maria > np.percentile(maria, 70))
+    albedo = cv2.GaussianBlur(albedo.astype(np.float32), (0, 0), 6.0)
+    img = shade * albedo
+    if limb:
+        yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+        r = np.hypot(xx - w * 0.55, yy - h * 0.5) / (0.62 * max(h, w))
+        img *= np.clip((1.0 - r) * 60.0, 0.0, 1.0)
+    return np.clip(img, 0.0, 1.0).astype(np.float32)
+
+
+def cut_tiles(scene: np.ndarray, size: int, step: int, seed: int = 0, rotation: float = 2.0,
+              gain: float = 0.12, noise: float = 0.005):
+    """Overlapping fields of `scene` on a grid, as a mosaic session would record them: each
+    with a random shift, field rotation (degrees), brightness and noise. Returns the tiles
+    and, for each, the 2×3 matrix tile pixel → scene pixel."""
+    rng = np.random.default_rng(seed)
+    h, w = scene.shape[:2]
+    tiles, truths = [], []
+    for y in range(0, h - size + 1, step):
+        for x in range(0, w - size + 1, step):
+            angle = np.radians(rng.uniform(-rotation, rotation))
+            cx = x + size / 2 + rng.uniform(-0.04, 0.04) * size
+            cy = y + size / 2 + rng.uniform(-0.04, 0.04) * size
+            c, s = np.cos(angle), np.sin(angle)
+            half = (size - 1) / 2.0
+            m = np.array([[c, -s, cx - (c * half - s * half)],
+                          [s, c, cy - (s * half + c * half)]])  # tile pixel → scene pixel
+            tile = cv2.warpAffine(scene, m, (size, size), flags=cv2.INTER_CUBIC | cv2.WARP_INVERSE_MAP,
+                                  borderMode=cv2.BORDER_REFLECT)
+            tile = tile * rng.uniform(1.0 - gain, 1.0 + gain)
+            tile = tile + rng.normal(0, noise, tile.shape).astype(np.float32)
+            tiles.append(np.clip(tile, 0.0, 1.0).astype(np.float32))
+            truths.append(m)
+    return tiles, truths
+
+
 def write_demo_ser(path: str, n: int = 200, size: int = 320, color: bool = False,
                    seed: int = 3) -> None:
     from .io.ser import COLOR_MONO, COLOR_RGB, write_ser
