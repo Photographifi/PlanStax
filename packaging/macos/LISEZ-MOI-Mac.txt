@@ -32,9 +32,13 @@ UTILISATION
   1. ⌘O : ouvrir une vidéo SER, AVI, MP4… (ou la glisser dans la fenêtre).
   2. F5 « Tout faire » : alignement, sélection des meilleures images, empilement.
   3. Onglet Ondelettes : monter l'accentuation des couches 1 à 3 (30 à 50 pour commencer).
-  4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux.
+  4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux,
+     orientation (quarts de tour, miroirs, rotation fine de ±90° au dixième de degré).
   5. ⌘S : enregistrer (TIFF 16 bits conseillé).
   Sur l'image de référence : ⌘ + clic ajoute un point d'alignement, Maj + clic le retire.
+
+  Langue : français, anglais ou espagnol, selon celle de macOS. Pour en changer : menu
+  Affichage > « Langue / Language / Idioma », puis redémarrez PlanStax.
 
   Plusieurs vidéos d'un coup : déposez-les dans le dossier « input » (créé à côté de
   PlanStax.command), puis Fichier > Traitement par lot (⌘L) > Démarrer ; une image par vidéo

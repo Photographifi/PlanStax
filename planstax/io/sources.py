@@ -13,6 +13,8 @@ import threading
 import cv2
 import numpy as np
 
+from ..i18n import tr
+
 from .images import IMAGE_EXTENSIONS, read_raw, to_float
 from .ser import SerFile
 
@@ -43,7 +45,7 @@ def debayer(raw: np.ndarray, pattern: str) -> np.ndarray:
     """Demosaic a uint8/uint16 Bayer mosaic into RGB with edge-aware interpolation."""
     pattern = pattern.upper()
     if pattern not in BAYER_PATTERNS:
-        raise ValueError(f"Matrice de Bayer inconnue : {pattern}")
+        raise ValueError(tr("Matrice de Bayer inconnue : {pattern}", pattern=pattern))
     edge_aware = _bayer_code(pattern, "_EA")
     if edge_aware is not None:
         try:
@@ -96,9 +98,9 @@ class FrameSource:
         raise NotImplementedError
 
     def describe(self) -> str:
-        kind = f"Bayer {self.bayer}" if self.bayer else ("couleur" if self.is_color else "mono")
-        return (f"{self.name} — {len(self)} images, {self.width}×{self.height}, "
-                f"{self.bit_depth} bits, {kind}")
+        kind = f"Bayer {self.bayer}" if self.bayer else (tr("couleur") if self.is_color else "mono")
+        return tr("{name} — {frames} images, {width}×{height}, {bits} bits, {kind}", name=self.name,
+                  frames=len(self), width=self.width, height=self.height, bits=self.bit_depth, kind=kind)
 
     def close(self) -> None:
         pass
@@ -156,11 +158,11 @@ class VideoSource(FrameSource):
         self._lock = threading.Lock()
         self._cap = cv2.VideoCapture(_short_path(path))
         if not self._cap.isOpened():
-            raise ValueError(f"Impossible d'ouvrir la vidéo : {path}")
+            raise ValueError(tr("Impossible d'ouvrir la vidéo : {path}", path=path))
         self._next = 0
         first = self._grab(0)
         if first is None:
-            raise ValueError("La vidéo ne contient aucune image lisible")
+            raise ValueError(tr("La vidéo ne contient aucune image lisible"))
         self._first = first
         self.bit_depth = 16 if first.dtype == np.uint16 else 8
         self.bayer = _bayer_choice(bayer_override, None)
@@ -203,7 +205,7 @@ class VideoSource(FrameSource):
         with self._lock:
             raw = self._grab(index)
         if raw is None:
-            raise IOError(f"Lecture impossible de l'image {index}")
+            raise IOError(tr("Lecture impossible de l'image {index}", index=index))
         if raw.ndim == 3:
             if self._mono_source or self.bayer:
                 raw = raw[..., 0]
@@ -225,7 +227,7 @@ class ImageSequenceSource(FrameSource):
     def __init__(self, paths: list[str], bayer_override: str | None = None) -> None:
         super().__init__()
         if not paths:
-            raise ValueError("Aucune image sélectionnée")
+            raise ValueError(tr("Aucune image sélectionnée"))
         self.paths = sorted(paths, key=_natural_key)
         self.path = self.paths[0]
         self.name = (os.path.basename(self.paths[0]) if len(self.paths) == 1
@@ -240,7 +242,7 @@ class ImageSequenceSource(FrameSource):
     def _read(self, index: int) -> np.ndarray:
         raw = read_raw(self.paths[index])
         if raw.shape[:2] != self._shape[:2]:
-            raise ValueError(f"Taille différente pour {os.path.basename(self.paths[index])}")
+            raise ValueError(tr("Taille différente pour {name}", name=os.path.basename(self.paths[index])))
         if self.bayer and raw.ndim == 2:
             if raw.dtype not in (np.uint8, np.uint16):
                 raw = (to_float(raw) * 65535).astype(np.uint16)
@@ -256,7 +258,7 @@ def open_source(paths: str | list[str], bayer_override: str | None = None) -> Fr
     if isinstance(paths, str):
         paths = [paths]
     if not paths:
-        raise ValueError("Aucun fichier sélectionné")
+        raise ValueError(tr("Aucun fichier sélectionné"))
     ext = os.path.splitext(paths[0])[1].lower()
     if len(paths) == 1 and ext == ".ser":
         return SerSource(paths[0], bayer_override)
@@ -264,4 +266,4 @@ def open_source(paths: str | list[str], bayer_override: str | None = None) -> Fr
         return VideoSource(paths[0], bayer_override)
     if all(os.path.splitext(p)[1].lower() in IMAGE_EXTENSIONS for p in paths):
         return ImageSequenceSource(list(paths), bayer_override)
-    raise ValueError("Format non reconnu (attendu : SER, AVI ou une série d'images)")
+    raise ValueError(tr("Format non reconnu (attendu : SER, AVI ou une série d'images)"))

@@ -48,6 +48,8 @@ VC_RUNTIME = {"msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "msvcp140_atom
               "msvcp140_codecvt_ids.dll", "vcruntime140.dll", "vcruntime140_1.dll", "concrt140.dll",
               "vcomp140.dll"}
 SYSTEM32 = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32")
+READMES = ["LISEZ-MOI.txt", "README.txt", "LEAME.txt"]   # French, English, Spanish
+INPUT_NOTE = "LISEZ-MOI - README - LEAME.txt"           # the note of the batch folder, in all three
 
 
 def log(msg: str) -> None:
@@ -208,20 +210,25 @@ def check_dependencies() -> list[str]:
 def precompile() -> None:
     log("• précompilation Python")
     for folder in (os.path.join(RUNTIME, "Lib"), SITE_OUT):
-        compileall.compile_dir(folder, quiet=1, workers=0,
+        # ddir: the .pyc files record "runtime\Lib\…" rather than the path of this build (which
+        # holds the builder's user name). Python shows the real location in tracebacks anyway.
+        compileall.compile_dir(folder, quiet=1, workers=0, ddir=os.path.relpath(folder, OUT),
                                invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)
 
 
 def write_docs() -> None:
-    with open(os.path.join(HERE, "portable", "LISEZ-MOI.txt"), encoding="utf-8") as fh:
-        text = fh.read().replace("{version}", __version__)
-    with open(os.path.join(OUT, "LISEZ-MOI.txt"), "w", encoding="utf-8-sig", newline="\r\n") as fh:
-        fh.write(text)
+    for name in READMES:
+        with open(os.path.join(HERE, "portable", name), encoding="utf-8") as fh:
+            text = fh.read().replace("{version}", __version__)
+        with open(os.path.join(OUT, name), "w", encoding="utf-8-sig", newline="\r\n") as fh:
+            fh.write(text)
     # Batch folders, ready to use (the note also keeps "input" from being an empty folder).
     os.makedirs(os.path.join(OUT, "output"), exist_ok=True)
     os.makedirs(os.path.join(OUT, "input"), exist_ok=True)
-    shutil.copy2(os.path.join(HERE, "portable", "input-LISEZ-MOI.txt"),
-                 os.path.join(OUT, "input", "LISEZ-MOI.txt"))
+    with open(os.path.join(HERE, "portable", "input-LISEZ-MOI.txt"), encoding="utf-8") as fh:
+        text = fh.read()
+    with open(os.path.join(OUT, "input", INPUT_NOTE), "w", encoding="utf-8-sig", newline="\r\n") as fh:
+        fh.write(text)
     licences = os.path.join(RUNTIME, "licences")
     os.makedirs(licences, exist_ok=True)
     shutil.copy2(os.path.join(ROOT, "LICENSE"), os.path.join(licences, "PlanStax-LICENSE.txt"))
@@ -250,7 +257,7 @@ def main() -> int:
     if os.path.isdir(OUT):
         # The previous build may be in use (a desktop shortcut to dist\PlanStax\PlanStax.exe):
         # never wipe videos or images someone put in its batch folders.
-        own = [os.path.join(OUT, "input", "LISEZ-MOI.txt")]
+        own = [os.path.join(OUT, "input", name) for name in (INPUT_NOTE, "LISEZ-MOI.txt")]  # 1.0 / before
         user_files = [os.path.join(d, f) for sub in ("input", "output")
                       for d, _, files in os.walk(os.path.join(OUT, sub)) for f in files
                       if os.path.join(d, f) not in own]

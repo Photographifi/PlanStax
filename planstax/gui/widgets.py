@@ -8,6 +8,8 @@ from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (QDoubleSpinBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
                                QSizePolicy, QSlider, QSpinBox, QWidget)
 
+from ..i18n import tr
+
 
 class ValueSlider(QWidget):
     """Horizontal slider coupled to a spin box. Emits valueChanged(float)."""
@@ -108,7 +110,7 @@ class QualityPlot(QWidget):
         self.setMinimumHeight(140)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.setCursor(Qt.CursorShape.CrossCursor)
-        self.setToolTip("Cliquez pour choisir combien d'images garder")
+        self.setToolTip(tr("Cliquez pour choisir combien d'images garder"))
 
     def set_data(self, quality: np.ndarray | None, keep: int) -> None:
         if quality is None or not len(quality):
@@ -138,12 +140,12 @@ class QualityPlot(QWidget):
         p.drawText(QRectF(0, r.bottom() - 8, 32, 14), Qt.AlignmentFlag.AlignRight, "0%")
         n = len(self._q)
         if n == 0:
-            p.drawText(r, Qt.AlignmentFlag.AlignCenter, "Pas encore d'analyse")
+            p.drawText(r, Qt.AlignmentFlag.AlignCenter, tr("Pas encore d'analyse"))
             return
         p.drawText(QRectF(r.left(), r.bottom() + 2, r.width(), 16), Qt.AlignmentFlag.AlignLeft,
-                   "meilleure")
+                   tr("meilleure"))
         p.drawText(QRectF(r.left(), r.bottom() + 2, r.width(), 16), Qt.AlignmentFlag.AlignRight,
-                   f"pire (n = {n})")
+                   tr("pire (n = {n})", n=n))
         xs = r.left() + np.arange(n) / max(n - 1, 1) * r.width()
         ys = r.bottom() - np.clip(self._q, 0, 1) * r.height()
         kept_x = r.left() + (self._keep - 0.5) / max(n - 1, 1) * r.width()

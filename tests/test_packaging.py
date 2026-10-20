@@ -21,11 +21,8 @@ def test_requirements_match_pyproject():
     assert reqs == deps
 
 
-@pytest.mark.parametrize("target, launcher, readme", [
-    ("Linux", "planstax.sh", "LISEZ-MOI-Linux.txt"),
-    ("Mac", "PlanStax.command", "LISEZ-MOI-Mac.txt"),
-])
-def test_source_archive(tmp_path, target, launcher, readme):
+@pytest.mark.parametrize("target, launcher", [("Linux", "planstax.sh"), ("Mac", "PlanStax.command")])
+def test_source_archive(tmp_path, target, launcher):
     spec = importlib.util.spec_from_file_location(
         "build_source_zips", os.path.join(ROOT, "packaging", "build_source_zips.py"))
     module = importlib.util.module_from_spec(spec)
@@ -42,7 +39,22 @@ def test_source_archive(tmp_path, target, launcher, readme):
         assert stat.S_IMODE(script.external_attr >> 16) == 0o755
         data = zf.read(script)
         assert data.startswith(b"#!/") and b"\r\n" not in data
-        assert __version__ in zf.read(f"PlanStax/{readme}").decode("utf-8")
+        for readme, title in ((f"LISEZ-MOI-{target}.txt", "empilement et ondelettes"),
+                              (f"README-{target}.txt", "stacking and wavelets"),
+                              (f"LEAME-{target}.txt", "apilado y ondículas")):
+            text = zf.read(f"PlanStax/{readme}").decode("utf-8")
+            assert __version__ in text and title in text and "{version}" not in text
+        assert "PlanStax/planstax/locales/catalog.py" in names
+
+
+def test_portable_read_mes_in_three_languages():
+    spec = importlib.util.spec_from_file_location(
+        "build_portable", os.path.join(ROOT, "packaging", "build_portable.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.READMES == ["LISEZ-MOI.txt", "README.txt", "LEAME.txt"]
+    for name in module.READMES + ["input-LISEZ-MOI.txt"]:
+        assert os.path.isfile(os.path.join(ROOT, "packaging", "portable", name))
 
 
 def test_settings_folder_per_platform(tmp_path, monkeypatch):

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDoubleSpinBo
 
 from .. import APP_NAME, __version__
 from ..core import Pipeline, auto_balance, estimate_rgb_shifts, finish
+from ..i18n import LANGUAGES, number, saved_language, tr
 from ..core.postprocess import apply_post, apply_pre
 from ..core.wavelets import WaveletProcessor, amount_from_gain, gain_from_amount
 from ..io import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, open_source, read_image, save_image
@@ -40,15 +41,26 @@ def _file_filter(label: str, extensions) -> str:
     return f"{label} ({' '.join(patterns)})"
 
 
-VIDEO_FILTER = _file_filter("Vidéos", VIDEO_EXTENSIONS)
-IMAGE_FILTER = _file_filter("Images", IMAGE_EXTENSIONS)
-SAVE_FILTERS = {
-    "TIFF 16 bits (*.tif)": (".tif", 16),
-    "PNG 16 bits (*.png)": (".png", 16),
-    "FITS 32 bits flottant (*.fits)": (".fits", 32),
-    "FITS 16 bits (*.fit)": (".fit", 16),
-    "JPEG (*.jpg)": (".jpg", 8),
-}
+def video_filter() -> str:
+    return _file_filter(tr("Vidéos"), VIDEO_EXTENSIONS)
+
+
+def image_filter() -> str:
+    return _file_filter(tr("Images"), IMAGE_EXTENSIONS)
+
+
+def all_files_filter() -> str:
+    return tr("Tous les fichiers (*)")
+
+
+def save_filters() -> dict[str, tuple[str, int]]:
+    return {
+        tr("TIFF 16 bits (*.tif)"): (".tif", 16),
+        tr("PNG 16 bits (*.png)"): (".png", 16),
+        tr("FITS 32 bits flottant (*.fits)"): (".fits", 32),
+        tr("FITS 16 bits (*.fit)"): (".fit", 16),
+        "JPEG (*.jpg)": (".jpg", 8),
+    }
 
 
 class MainWindow(QMainWindow):
@@ -107,12 +119,12 @@ class MainWindow(QMainWindow):
         self.frame_spin.setKeyboardTracking(False)
         self.frame_spin.valueChanged.connect(lambda v: self.frame_slider.setValue(v - 1))
         self.frame_order = QComboBox()
-        self.frame_order.addItem("Ordre chronologique", "time")
-        self.frame_order.addItem("Par qualité (meilleures d'abord)", "quality")
+        self.frame_order.addItem(tr("Ordre chronologique"), "time")
+        self.frame_order.addItem(tr("Par qualité (meilleures d'abord)"), "quality")
         self.frame_order.currentIndexChanged.connect(lambda _: self._on_frame_slider(self.frame_slider.value()))
         self.frame_info = QLabel()
         self.frame_info.setMinimumWidth(220)
-        fb.addWidget(QLabel("Image :"))
+        fb.addWidget(QLabel(tr("Image :")))
         fb.addWidget(self.frame_slider, 1)
         fb.addWidget(self.frame_spin)
         fb.addWidget(self.frame_order)
@@ -126,11 +138,11 @@ class MainWindow(QMainWindow):
         ll.addWidget(self.frame_bar)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._scroll(self._tab_align()), "1 · Alignement")
-        self.tabs.addTab(self._scroll(self._tab_select()), "2 · Sélection")
-        self.tabs.addTab(self._scroll(self._tab_stack()), "3 · Empilement")
-        self.tabs.addTab(self._scroll(self._tab_wavelets()), "4 · Ondelettes")
-        self.tabs.addTab(self._scroll(self._tab_post()), "5 · Finitions")
+        self.tabs.addTab(self._scroll(self._tab_align()), tr("1 · Alignement"))
+        self.tabs.addTab(self._scroll(self._tab_select()), tr("2 · Sélection"))
+        self.tabs.addTab(self._scroll(self._tab_stack()), tr("3 · Empilement"))
+        self.tabs.addTab(self._scroll(self._tab_wavelets()), tr("4 · Ondelettes"))
+        self.tabs.addTab(self._scroll(self._tab_post()), tr("5 · Finitions"))
         self.tabs.currentChanged.connect(self._on_tab)
         self.tabs.setMinimumWidth(380)
 
@@ -164,60 +176,69 @@ class MainWindow(QMainWindow):
             a.setCheckable(checkable)
             return a
 
-        self.act_open = act("Ouvrir une vidéo…", self.open_video, "Ctrl+O",
-                            "Ouvrir une vidéo SER/AVI ou une série d'images")
-        self.act_open_img = act("Ouvrir une image à traiter…", self.open_image, "Ctrl+I",
-                                "Ouvrir une image déjà empilée pour les ondelettes")
-        self.act_batch = act("Traitement par lot…", self.open_batch, "Ctrl+L",
-                             "Traiter toutes les vidéos du dossier « input » : une image par vidéo dans « output »")
-        self.act_mosaic = act("Assembler une mosaïque…", self.open_mosaic, MOSAIC_KEY,
-                              "Assembler en une seule image des images qui se recouvrent (Lune, Soleil, paysage)")
-        self.act_save = act("Enregistrer l'image…", self.save_final, "Ctrl+S",
-                            "Enregistrer le résultat (ondelettes et finitions comprises)")
-        self.act_save_raw = act("Enregistrer l'empilement brut…", self.save_stacked, "Ctrl+Shift+S",
-                                "Enregistrer l'empilement sans ondelettes ni finitions")
-        self.act_doall = act("▶  Tout faire", self.do_all, "F5",
-                             "Analyse, alignement, sélection et empilement en une fois")
-        self.act_before = act("Avant / après", self._toggle_before, "B",
-                              "Comparer avec l'empilement non traité", checkable=True)
-        self.act_points = act("Afficher les points", lambda on: self.view.show_points(on), "P",
+        self.act_open = act(tr("Ouvrir une vidéo…"), self.open_video, "Ctrl+O",
+                            tr("Ouvrir une vidéo SER/AVI ou une série d'images"))
+        self.act_open_img = act(tr("Ouvrir une image à traiter…"), self.open_image, "Ctrl+I",
+                                tr("Ouvrir une image déjà empilée pour les ondelettes"))
+        self.act_batch = act(tr("Traitement par lot…"), self.open_batch, "Ctrl+L",
+                             tr("Traiter toutes les vidéos du dossier « input » : une image par vidéo dans « output »"))
+        self.act_mosaic = act(tr("Assembler une mosaïque…"), self.open_mosaic, MOSAIC_KEY,
+                              tr("Assembler en une seule image des images qui se recouvrent (Lune, Soleil, paysage)"))
+        self.act_save = act(tr("Enregistrer l'image…"), self.save_final, "Ctrl+S",
+                            tr("Enregistrer le résultat (ondelettes et finitions comprises)"))
+        self.act_save_raw = act(tr("Enregistrer l'empilement brut…"), self.save_stacked, "Ctrl+Shift+S",
+                                tr("Enregistrer l'empilement sans ondelettes ni finitions"))
+        self.act_doall = act(tr("▶  Tout faire"), self.do_all, "F5",
+                             tr("Analyse, alignement, sélection et empilement en une fois"))
+        self.act_before = act(tr("Avant / après"), self._toggle_before, "B",
+                              tr("Comparer avec l'empilement non traité"), checkable=True)
+        self.act_points = act(tr("Afficher les points"), lambda on: self.view.show_points(on), "P",
                               checkable=True)
         self.act_points.setChecked(True)
-        self.act_fit = act("Ajuster à la fenêtre", self.view.fit, "F")
-        self.act_100 = act("Taille réelle (100 %)", lambda: self.view.zoom_to(1.0), "1")
-        self.act_200 = act("Zoom 200 %", lambda: self.view.zoom_to(2.0), "2")
+        self.act_fit = act(tr("Ajuster à la fenêtre"), self.view.fit, "F")
+        self.act_100 = act(tr("Taille réelle (100 %)"), lambda: self.view.zoom_to(1.0), "1")
+        self.act_200 = act(tr("Zoom 200 %"), lambda: self.view.zoom_to(2.0), "2")
 
         mb = self.menuBar()
-        m = mb.addMenu("&Fichier")
+        m = mb.addMenu(tr("&Fichier"))
         for a in (self.act_open, self.act_open_img, self.act_batch, self.act_mosaic):
             m.addAction(a)
         m.addSeparator()
         m.addAction(self.act_save)
         m.addAction(self.act_save_raw)
         m.addSeparator()
-        m.addAction(act("Quitter", self.close, "Ctrl+Q"))
+        m.addAction(act(tr("Quitter"), self.close, "Ctrl+Q"))
 
-        self.presets_menu = mb.addMenu("&Préréglages")
+        self.presets_menu = mb.addMenu(tr("&Préréglages"))
         self.presets_menu.aboutToShow.connect(self._fill_presets_menu)
 
-        m = mb.addMenu("&Affichage")
+        m = mb.addMenu(tr("&Affichage"))
         for a in (self.act_fit, self.act_100, self.act_200):
             m.addAction(a)
         m.addSeparator()
         m.addAction(self.act_points)
         m.addAction(self.act_before)
         m.addSeparator()
-        tm = m.addMenu("Thème")
-        for key, label in (("dark", "Sombre"), ("light", "Clair"), ("night", "Nuit (rouge, préserve la vision nocturne)")):
+        tm = m.addMenu(tr("Thème"))
+        for key, label in (("dark", tr("Sombre")), ("light", tr("Clair")),
+                           ("night", tr("Nuit (rouge, préserve la vision nocturne)"))):
             tm.addAction(act(label, lambda _=False, k=key: self._set_theme(k)))
+        lm = m.addMenu(tr("Langue") + " / Language / Idioma")
+        chosen = saved_language()
+        self.language_actions = {}
+        for code, label in [(None, tr("Automatique (langue du système)"))] + list(LANGUAGES.items()):
+            a = act(label, lambda _=False, c=code: self._set_language(c), checkable=True)
+            a.setChecked(code == chosen)
+            lm.addAction(a)
+            self.language_actions[code] = a
 
-        m = mb.addMenu("&Aide")
-        m.addAction(act("Guide rapide", self._show_help, "F1"))
+        m = mb.addMenu(tr("&Aide"))
+        m.addAction(act(tr("Guide rapide"), self._show_help, "F1"))
         if os.name == "nt":
-            m.addAction(act("Créer un raccourci sur le Bureau", self._desktop_shortcut))
-        m.addAction(act("À propos de PlanStax", self._show_about))
+            m.addAction(act(tr("Créer un raccourci sur le Bureau"), self._desktop_shortcut))
+        m.addAction(act(tr("À propos de PlanStax"), self._show_about))
 
-        tb = QToolBar("Outils")
+        tb = QToolBar(tr("Outils"))
         tb.setObjectName("main_toolbar")
         tb.setMovable(False)
         tb.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
@@ -241,13 +262,13 @@ class MainWindow(QMainWindow):
 
     def _build_statusbar(self) -> None:
         sb = self.statusBar()
-        self.status_label = QLabel(f"Ouvrez une vidéo ({CMD}+O) ou glissez-la dans la fenêtre.")
+        self.status_label = QLabel(tr("Ouvrez une vidéo ({key}+O) ou glissez-la dans la fenêtre.", key=CMD))
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
         self.progress.setMaximumWidth(260)
         self.progress.setTextVisible(False)
         self.progress.hide()
-        self.cancel_btn = QPushButton("Annuler")
+        self.cancel_btn = QPushButton(tr("Annuler"))
         self.cancel_btn.hide()
         self.cancel_btn.clicked.connect(self._cancel_task)
         sb.addWidget(self.status_label, 1)
@@ -287,76 +308,76 @@ class MainWindow(QMainWindow):
         lay = QVBoxLayout(w)
         A = lambda: self.settings.align  # noqa: E731
 
-        box, form = group("Source")
-        self.source_label = QLabel("Aucune vidéo ouverte")
+        box, form = group(tr("Source"))
+        self.source_label = QLabel(tr("Aucune vidéo ouverte"))
         self.source_label.setWordWrap(True)
         form.addRow(self.source_label)
         self.bayer_combo = QComboBox()
-        for label, data in (("Automatique (selon le fichier)", None), ("Aucune (mono)", NO_BAYER),
+        for label, data in ((tr("Automatique (selon le fichier)"), None), (tr("Aucune (mono)"), NO_BAYER),
                             ("RGGB", "RGGB"), ("GRBG", "GRBG"), ("GBRG", "GBRG"), ("BGGR", "BGGR")):
             self.bayer_combo.addItem(label, data)
         self.bayer_combo.currentIndexChanged.connect(self._on_bayer_changed)
-        form.addRow("Matrice de Bayer :", self.bayer_combo)
+        form.addRow(tr("Matrice de Bayer :"), self.bayer_combo)
         lay.addWidget(box)
 
-        box, form = group("Objet")
+        box, form = group(tr("Objet"))
         self.mode_combo = QComboBox()
-        for label, data in (("Automatique", "auto"), ("Planète (disque sur fond noir)", "planet"),
-                            ("Surface (Lune, Soleil)", "surface")):
+        for label, data in ((tr("Automatique"), "auto"), (tr("Planète (disque sur fond noir)"), "planet"),
+                            (tr("Surface (Lune, Soleil)"), "surface")):
             self.mode_combo.addItem(label, data)
         self._bind_attr(self.mode_combo, A, "mode", self._invalidate_analysis)
-        form.addRow("Type :", self.mode_combo)
+        form.addRow(tr("Type :"), self.mode_combo)
         self.noise_spin = dspin(0.0, 5.0, 1.5, 0.25, 2)
-        self.noise_spin.setToolTip("Lissage appliqué avant la mesure de netteté : augmentez-le pour "
-                                   "des vidéos bruitées afin que le bruit ne passe pas pour du détail.")
+        self.noise_spin.setToolTip(tr("Lissage appliqué avant la mesure de netteté : augmentez-le pour "
+                                      "des vidéos bruitées afin que le bruit ne passe pas pour du détail."))
         self._bind_attr(self.noise_spin, A, "quality_noise", self._invalidate_analysis)
-        form.addRow("Robustesse au bruit :", self.noise_spin)
+        form.addRow(tr("Robustesse au bruit :"), self.noise_spin)
         self.ref_spin = spin(0, 500, 0)
         self.ref_spin.setSpecialValueText("auto")
-        self.ref_spin.setToolTip("Nombre de meilleures images moyennées pour la référence (auto = 10 %, 3 à 50)")
+        self.ref_spin.setToolTip(tr("Nombre de meilleures images moyennées pour la référence (auto = 10 %, 3 à 50)"))
         self._bind_attr(self.ref_spin, A, "reference_frames", self._invalidate_reference)
-        form.addRow("Images de référence :", self.ref_spin)
+        form.addRow(tr("Images de référence :"), self.ref_spin)
         lay.addWidget(box)
 
-        box, form = group("Points d'alignement")
+        box, form = group(tr("Points d'alignement"))
         self.ap_spacing = spin(8, 400, 30, " px")
         self._bind_attr(self.ap_spacing, A, "ap_spacing", self._replace_points)
-        form.addRow("Espacement :", self.ap_spacing)
+        form.addRow(tr("Espacement :"), self.ap_spacing)
         self.ap_box = spin(8, 400, 35, " px")
         self._bind_attr(self.ap_box, A, "ap_box_size", self._replace_points)
-        form.addRow("Taille des boîtes :", self.ap_box)
+        form.addRow(tr("Taille des boîtes :"), self.ap_box)
         self.ap_radius = spin(1, 100, 10, " px")
-        self.ap_radius.setToolTip("Déplacement local maximal recherché autour de chaque point")
+        self.ap_radius.setToolTip(tr("Déplacement local maximal recherché autour de chaque point"))
         self._bind_attr(self.ap_radius, A, "search_radius", self._replace_points)
-        form.addRow("Rayon de recherche :", self.ap_radius)
+        form.addRow(tr("Rayon de recherche :"), self.ap_radius)
         self.ap_min = spin(0, 255, 30)
         self._bind_attr(self.ap_min, A, "min_brightness", self._replace_points)
-        form.addRow("Luminosité min. :", self.ap_min)
+        form.addRow(tr("Luminosité min. :"), self.ap_min)
         self.ap_max = spin(0, 255, 255)
         self._bind_attr(self.ap_max, A, "max_brightness", self._replace_points)
-        form.addRow("Luminosité max. :", self.ap_max)
+        form.addRow(tr("Luminosité max. :"), self.ap_max)
         self.ap_edge = spin(0, 500, 20, " px")
         self._bind_attr(self.ap_edge, A, "edge_margin", self._replace_points)
-        form.addRow("Marge au bord :", self.ap_edge)
+        form.addRow(tr("Marge au bord :"), self.ap_edge)
         self.ap_maxn = spin(1, 5000, 500)
         self._bind_attr(self.ap_maxn, A, "max_points", self._replace_points)
-        form.addRow("Nombre maximal :", self.ap_maxn)
+        form.addRow(tr("Nombre maximal :"), self.ap_maxn)
         self.ap_struct = dspin(0.0, 100.0, 5.0, 1.0, 0, " %")
-        self.ap_struct.setToolTip("Écarte les zones sans détail (moins de x % du détail de la meilleure zone)")
+        self.ap_struct.setToolTip(tr("Écarte les zones sans détail (moins de x % du détail de la meilleure zone)"))
         self._bind(self.ap_struct, lambda: self.settings.align.min_structure * 100.0,
                    lambda v: setattr(self.settings.align, "min_structure", v / 100.0), self._replace_points)
-        form.addRow("Détail minimal :", self.ap_struct)
-        self.points_btn = QPushButton("Placer les points")
+        form.addRow(tr("Détail minimal :"), self.ap_struct)
+        self.points_btn = QPushButton(tr("Placer les points"))
         self.points_btn.clicked.connect(self.place_points)
         form.addRow(self.points_btn)
         self.points_label = QLabel("")
         self.points_label.setWordWrap(True)
         form.addRow(self.points_label)
-        form.addRow(hint(f"{CMD} + clic sur l'image : ajouter un point · Maj + clic : supprimer · "
-                         "molette : zoom · glisser : déplacer"))
+        form.addRow(hint(tr("{key} + clic sur l'image : ajouter un point · Maj + clic : supprimer · "
+                            "molette : zoom · glisser : déplacer", key=CMD)))
         lay.addWidget(box)
 
-        self.align_btn = QPushButton("Aligner")
+        self.align_btn = QPushButton(tr("Aligner"))
         self.align_btn.setObjectName("primary")
         self.align_btn.clicked.connect(self.align)
         lay.addWidget(self.align_btn)
@@ -371,33 +392,33 @@ class MainWindow(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         L = lambda: self.settings.limit  # noqa: E731
-        box, form = group("Garder les meilleures images")
+        box, form = group(tr("Garder les meilleures images"))
         self.limit_method = QComboBox()
-        for label, data in (("Pourcentage", "percent"), ("Nombre d'images", "count"),
-                            ("Qualité minimale", "quality")):
+        for label, data in ((tr("Pourcentage"), "percent"), (tr("Nombre d'images"), "count"),
+                            (tr("Qualité minimale"), "quality")):
             self.limit_method.addItem(label, data)
         self._bind_attr(self.limit_method, L, "method", self._on_limit_changed)
-        form.addRow("Méthode :", self.limit_method)
+        form.addRow(tr("Méthode :"), self.limit_method)
         self.limit_percent = dspin(0.1, 100.0, 80.0, 5.0, 1, " %")
         self._bind_attr(self.limit_percent, L, "percent", self._on_limit_changed)
-        form.addRow("Pourcentage :", self.limit_percent)
+        form.addRow(tr("Pourcentage :"), self.limit_percent)
         self.limit_count = spin(1, 1_000_000, 100)
         self._bind_attr(self.limit_count, L, "count", self._on_limit_changed)
-        form.addRow("Nombre :", self.limit_count)
+        form.addRow(tr("Nombre :"), self.limit_count)
         self.limit_quality = dspin(0.0, 100.0, 50.0, 5.0, 1, " %")
-        self.limit_quality.setToolTip("En pourcentage de la qualité de la meilleure image")
+        self.limit_quality.setToolTip(tr("En pourcentage de la qualité de la meilleure image"))
         self._bind_attr(self.limit_quality, L, "min_quality", self._on_limit_changed)
-        form.addRow("Qualité minimale :", self.limit_quality)
+        form.addRow(tr("Qualité minimale :"), self.limit_quality)
         lay.addWidget(box)
 
-        box, form = group("Qualité des images")
+        box, form = group(tr("Qualité des images"))
         self.quality_plot = QualityPlot()
         self.quality_plot.cutoffRequested.connect(self._on_plot_cutoff)
         form.addRow(self.quality_plot)
         self.select_label = QLabel("")
         form.addRow(self.select_label)
-        form.addRow(hint("La barre sous l'image permet de parcourir la vidéo, dans l'ordre "
-                         "chronologique ou de la meilleure à la pire image."))
+        form.addRow(hint(tr("La barre sous l'image permet de parcourir la vidéo, dans l'ordre "
+                            "chronologique ou de la meilleure à la pire image.")))
         lay.addWidget(box)
         lay.addStretch(1)
         return w
@@ -407,35 +428,35 @@ class MainWindow(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         S = lambda: self.settings.stack  # noqa: E731
-        box, form = group("Empilement")
+        box, form = group(tr("Empilement"))
         self.local_percent = dspin(1.0, 100.0, 100.0, 5.0, 0, " %")
-        self.local_percent.setToolTip(
+        self.local_percent.setToolTip(tr(
             "Pour chaque point d'alignement, ne garder que ce pourcentage des images retenues, "
-            "les plus nettes à cet endroit précis (100 % = mêmes images partout, comme RegiStax).")
+            "les plus nettes à cet endroit précis (100 % = mêmes images partout, comme RegiStax)."))
         self._bind_attr(self.local_percent, S, "local_percent")
-        form.addRow("Sélection locale :", self.local_percent)
+        form.addRow(tr("Sélection locale :"), self.local_percent)
         self.scale_combo = QComboBox()
-        for label, data in (("1× (taille d'origine)", 1.0), ("1,5×", 1.5), ("2×", 2.0), ("3×", 3.0)):
+        for label, data in ((tr("1× (taille d'origine)"), 1.0), (number(1.5, 1) + "×", 1.5), ("2×", 2.0), ("3×", 3.0)):
             self.scale_combo.addItem(label, data)
-        self.scale_combo.setToolTip("Agrandissement pendant l'empilement (type « drizzle »)")
+        self.scale_combo.setToolTip(tr("Agrandissement pendant l'empilement (type « drizzle »)"))
         self._bind_attr(self.scale_combo, S, "scale")
-        form.addRow("Agrandissement :", self.scale_combo)
-        self.norm_check = QCheckBox("Égaliser la luminosité des images")
-        self.norm_check.setToolTip("Compense les variations de transparence (voiles, brume)")
+        form.addRow(tr("Agrandissement :"), self.scale_combo)
+        self.norm_check = QCheckBox(tr("Égaliser la luminosité des images"))
+        self.norm_check.setToolTip(tr("Compense les variations de transparence (voiles, brume)"))
         self._bind_attr(self.norm_check, S, "normalize_brightness")
         form.addRow(self.norm_check)
-        self.weight_check = QCheckBox("Pondérer par la qualité")
+        self.weight_check = QCheckBox(tr("Pondérer par la qualité"))
         self._bind_attr(self.weight_check, S, "quality_weighting")
         form.addRow(self.weight_check)
         lay.addWidget(box)
-        self.stack_btn = QPushButton("Empiler")
+        self.stack_btn = QPushButton(tr("Empiler"))
         self.stack_btn.setObjectName("primary")
         self.stack_btn.clicked.connect(self.stack)
         lay.addWidget(self.stack_btn)
         self.stack_label = QLabel("")
         self.stack_label.setWordWrap(True)
         lay.addWidget(self.stack_label)
-        save = QPushButton("Enregistrer l'empilement brut…")
+        save = QPushButton(tr("Enregistrer l'empilement brut…"))
         save.clicked.connect(self.save_stacked)
         lay.addWidget(save)
         lay.addStretch(1)
@@ -446,56 +467,56 @@ class MainWindow(QMainWindow):
         w = QWidget()
         lay = QVBoxLayout(w)
         W = lambda: self.settings.wavelet  # noqa: E731
-        box, form = group("Méthode")
+        box, form = group(tr("Méthode"))
         self.wl_scheme = QComboBox()
-        self.wl_scheme.addItem("B3-spline « à trous » (linéaire)", "b3spline")
-        self.wl_scheme.addItem("Gaussienne", "gaussian")
+        self.wl_scheme.addItem(tr("B3-spline « à trous » (linéaire)"), "b3spline")
+        self.wl_scheme.addItem(tr("Gaussienne"), "gaussian")
         self._bind_attr(self.wl_scheme, W, "scheme", self._request_preview)
-        form.addRow("Schéma :", self.wl_scheme)
+        form.addRow(tr("Schéma :"), self.wl_scheme)
         self.wl_step = QComboBox()
-        self.wl_step.addItem("Dyadique (1, 2, 4, 8…)", "dyadic")
-        self.wl_step.addItem("Linéaire (1, 2, 3, 4…)", "linear")
+        self.wl_step.addItem(tr("Dyadique (1, 2, 4, 8…)"), "dyadic")
+        self.wl_step.addItem(tr("Linéaire (1, 2, 3, 4…)"), "linear")
         self._bind_attr(self.wl_step, W, "step", self._request_preview)
-        form.addRow("Progression :", self.wl_step)
+        form.addRow(tr("Progression :"), self.wl_step)
         self.wl_initial = dspin(0.25, 8.0, 1.0, 0.25, 2, " px")
         self._bind_attr(self.wl_initial, W, "initial", self._request_preview)
-        form.addRow("Taille de la 1ʳᵉ couche :", self.wl_initial)
+        form.addRow(tr("Taille de la 1ʳᵉ couche :"), self.wl_initial)
         self.wl_target = QComboBox()
-        self.wl_target.addItem("Canaux RVB", "rgb")
-        self.wl_target.addItem("Luminance seulement", "luminance")
-        self.wl_target.setToolTip("En luminance, l'accentuation n'amplifie pas le bruit de couleur")
+        self.wl_target.addItem(tr("Canaux RVB"), "rgb")
+        self.wl_target.addItem(tr("Luminance seulement"), "luminance")
+        self.wl_target.setToolTip(tr("En luminance, l'accentuation n'amplifie pas le bruit de couleur"))
         self._bind_attr(self.wl_target, W, "target", self._request_preview)
-        form.addRow("Appliquer sur :", self.wl_target)
+        form.addRow(tr("Appliquer sur :"), self.wl_target)
         lay.addWidget(box)
 
-        box, form = group("Couches")
+        box, form = group(tr("Couches"))
         self.layer_checks, self.layer_gain, self.layer_factor, self.layer_denoise = [], [], [], []
         table = QWidget()
         grid = QGridLayout(table)
         grid.setContentsMargins(0, 0, 0, 0)
         grid.setVerticalSpacing(2)
         grid.setColumnStretch(0, 1)
-        for col, text in ((1, "Accentuation"), (2, "Gain"), (3, "Débruitage")):
+        for col, text in ((1, tr("Accentuation")), (2, tr("Gain")), (3, tr("Débruitage"))):
             title = QLabel(text)
             title.setStyleSheet("color: palette(mid); font-size: 9pt;")
             grid.addWidget(title, 0, col)
         for i in range(6):
             Li = lambda i=i: self.settings.wavelet.layers[i]  # noqa: E731
-            chk = QCheckBox(f"Couche {i + 1}")
+            chk = QCheckBox(tr("Couche {n}", n=i + 1))
             self._bind_attr(chk, Li, "enabled", self._on_layer_toggled)
             # The slider gets a line of its own: the whole width of the panel for fine control.
             gain = ValueSlider(0.0, 100.0, 0.5, 0.0, 1, spin_beside=False)
-            gain.setToolTip("Accentuation de cette couche : 0 = image intacte, 100 = le plus fort.\n"
-                            "La plage est adaptée à chaque couche : un même réglage donne un effet\n"
-                            "comparable de la couche 1 à la couche 6.")
+            gain.setToolTip(tr("Accentuation de cette couche : 0 = image intacte, 100 = le plus fort.\n"
+                               "La plage est adaptée à chaque couche : un même réglage donne un effet\n"
+                               "comparable de la couche 1 à la couche 6."))
             self._bind(gain, lambda Li=Li, i=i: amount_from_gain(i, Li().gain),
                        lambda v, Li=Li, i=i: setattr(Li(), "gain", gain_from_amount(i, v)),
                        self._on_gain_changed)
             factor = QLabel()
             factor.setMinimumWidth(46)
-            factor.setToolTip("Gain appliqué à la couche (valeur enregistrée dans les préréglages)")
+            factor.setToolTip(tr("Gain appliqué à la couche (valeur enregistrée dans les préréglages)"))
             den = dspin(0.0, 1.0, 0.0, 0.05, 2)
-            den.setToolTip("Débruitage de la couche (0 = aucun)")
+            den.setToolTip(tr("Débruitage de la couche (0 = aucun)"))
             den.setFixedWidth(64)
             self._bind_attr(den, Li, "denoise", self._request_preview)
             for col, widget in enumerate((chk, gain.spin, factor, den)):
@@ -507,12 +528,12 @@ class MainWindow(QMainWindow):
             self.layer_factor.append(factor)
             self.layer_denoise.append(den)
         form.addRow(table)
-        reset = QPushButton("Réinitialiser les couches")
+        reset = QPushButton(tr("Réinitialiser les couches"))
         reset.clicked.connect(self._reset_wavelets)
         form.addRow(reset)
-        form.addRow(hint("Accentuation de 0 (image intacte) à 100. Couches 1-2 : détails fins (et "
-                         "bruit). Couches 3-4 : structures moyennes. Couches 5-6 : grandes structures. "
-                         "Commencez vers 30 à 50 sur les couches 1 à 3."))
+        form.addRow(hint(tr("Accentuation de 0 (image intacte) à 100. Couches 1-2 : détails fins (et "
+                            "bruit). Couches 3-4 : structures moyennes. Couches 5-6 : grandes structures. "
+                            "Commencez vers 30 à 50 sur les couches 1 à 3.")))
         lay.addWidget(box)
         lay.addStretch(1)
         return w
@@ -523,12 +544,12 @@ class MainWindow(QMainWindow):
         lay = QVBoxLayout(w)
         P = lambda: self.settings.post  # noqa: E731
 
-        box, form = group("Alignement des couleurs (dispersion atmosphérique)")
-        btn = QPushButton("Alignement RVB automatique")
+        box, form = group(tr("Alignement des couleurs (dispersion atmosphérique)"))
+        btn = QPushButton(tr("Alignement RVB automatique"))
         btn.clicked.connect(self._auto_rgb_align)
         form.addRow(btn)
         self.shift_widgets = []
-        for label, attr in (("Rouge", "shift_r"), ("Bleu", "shift_b")):
+        for label, attr in ((tr("Rouge"), "shift_r"), (tr("Bleu"), "shift_b")):
             row = QWidget()
             rl = QHBoxLayout(row)
             rl.setContentsMargins(0, 0, 0, 0)
@@ -539,53 +560,59 @@ class MainWindow(QMainWindow):
                 rl.addWidget(QLabel(axis))
                 rl.addWidget(sp)
                 self.shift_widgets.append(sp)
-            form.addRow(f"{label} :", row)
+            form.addRow(tr("{label} :", label=label), row)
         self.post_rgb_box = box
         lay.addWidget(box)
 
-        box, form = group("Balance des couleurs")
-        btn = QPushButton("Balance automatique")
+        box, form = group(tr("Balance des couleurs"))
+        btn = QPushButton(tr("Balance automatique"))
         btn.clicked.connect(self._auto_balance)
         form.addRow(btn)
-        for label, attr in (("Rouge", "gain_r"), ("Vert", "gain_g"), ("Bleu", "gain_b")):
+        for label, attr in ((tr("Rouge"), "gain_r"), (tr("Vert"), "gain_g"), (tr("Bleu"), "gain_b")):
             s = ValueSlider(0.2, 3.0, 0.01, 1.0, 2)
             self._bind_attr(s, P, attr, self._request_preview)
-            form.addRow(f"{label} :", s)
+            form.addRow(tr("{label} :", label=label), s)
         sat = ValueSlider(0.0, 3.0, 0.01, 1.0, 2)
         self._bind_attr(sat, P, "saturation", self._request_preview)
-        form.addRow("Saturation :", sat)
+        form.addRow(tr("Saturation :"), sat)
         self.post_color_box = box
         lay.addWidget(box)
 
-        box, form = group("Niveaux")
-        for label, attr, lo, hi, step, val in (("Point noir", "black", 0.0, 0.5, 0.005, 0.0),
-                                               ("Point blanc", "white", 0.3, 1.5, 0.005, 1.0),
-                                               ("Gamma", "gamma", 0.2, 3.0, 0.01, 1.0),
-                                               ("Luminosité", "brightness", -0.5, 0.5, 0.005, 0.0),
-                                               ("Contraste", "contrast", 0.2, 3.0, 0.01, 1.0)):
+        box, form = group(tr("Niveaux"))
+        for label, attr, lo, hi, step, val in ((tr("Point noir"), "black", 0.0, 0.5, 0.005, 0.0),
+                                               (tr("Point blanc"), "white", 0.3, 1.5, 0.005, 1.0),
+                                               (tr("Gamma"), "gamma", 0.2, 3.0, 0.01, 1.0),
+                                               (tr("Luminosité"), "brightness", -0.5, 0.5, 0.005, 0.0),
+                                               (tr("Contraste"), "contrast", 0.2, 3.0, 0.01, 1.0)):
             s = ValueSlider(lo, hi, step, val, 3)
             self._bind_attr(s, P, attr, self._request_preview)
-            form.addRow(f"{label} :", s)
-        btn = QPushButton("Étirement automatique")
+            form.addRow(tr("{label} :", label=label), s)
+        btn = QPushButton(tr("Étirement automatique"))
         btn.clicked.connect(self._auto_levels)
         form.addRow(btn)
         lay.addWidget(box)
 
-        box, form = group("Orientation")
+        box, form = group(tr("Orientation"))
         rot = QComboBox()
-        for label, data in (("0°", 0), ("90° horaire", 90), ("180°", 180), ("90° antihoraire", 270)):
+        for label, data in (("0°", 0), (tr("90° horaire"), 90), ("180°", 180), (tr("90° antihoraire"), 270)):
             rot.addItem(label, data)
         self._bind_attr(rot, P, "rotate", self._request_preview)
-        form.addRow("Rotation :", rot)
-        fh = QCheckBox("Miroir horizontal")
+        form.addRow(tr("Rotation :"), rot)
+        self.angle_slider = ValueSlider(-90.0, 90.0, 0.1, 0.0, 1)
+        self.angle_slider.spin.setSuffix(" °")
+        self.angle_slider.setToolTip(tr("Rotation fine de l'image finale, en degrés (positif : sens horaire).\n"
+                                        "L'image est agrandie pour que rien ne soit coupé : les coins sont noirs."))
+        self._bind_attr(self.angle_slider, P, "angle", self._request_preview)
+        form.addRow(tr("Rotation fine :"), self.angle_slider)
+        fh = QCheckBox(tr("Miroir horizontal"))
         self._bind_attr(fh, P, "flip_h", self._request_preview)
-        fv = QCheckBox("Miroir vertical")
+        fv = QCheckBox(tr("Miroir vertical"))
         self._bind_attr(fv, P, "flip_v", self._request_preview)
         form.addRow(fh)
         form.addRow(fv)
         lay.addWidget(box)
 
-        reset = QPushButton("Réinitialiser les finitions")
+        reset = QPushButton(tr("Réinitialiser les finitions"))
         reset.clicked.connect(self._reset_post)
         lay.addWidget(reset)
         lay.addStretch(1)
@@ -597,14 +624,14 @@ class MainWindow(QMainWindow):
 
     def open_video(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
-            self, "Ouvrir une vidéo ou une série d'images", self._last_dir(),
-            f"{VIDEO_FILTER};;{IMAGE_FILTER};;Tous les fichiers (*)")
+            self, tr("Ouvrir une vidéo ou une série d'images"), self._last_dir(),
+            f"{video_filter()};;{image_filter()};;{all_files_filter()}")
         if paths:
             self.load_source(paths)
 
     def open_image(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Ouvrir une image à traiter", self._last_dir(),
-                                              f"{IMAGE_FILTER};;Tous les fichiers (*)")
+        path, _ = QFileDialog.getOpenFileName(self, tr("Ouvrir une image à traiter"), self._last_dir(),
+                                              f"{image_filter()};;{all_files_filter()}")
         if path:
             self.load_image(path)
 
@@ -614,7 +641,7 @@ class MainWindow(QMainWindow):
         try:
             src = open_source(paths, bayer)
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(self, APP_NAME, f"Impossible d'ouvrir le fichier :\n{exc}")
+            QMessageBox.critical(self, APP_NAME, tr("Impossible d'ouvrir le fichier :\n{error}", error=exc))
             return
         if self.source is not None:
             self.source.close()
@@ -641,7 +668,8 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentIndex(TAB_ALIGN)
         self._view_mode = "frame"
         self._on_frame_slider(0, keep_view=False)
-        self.status_label.setText(f"{src.describe()} — cliquez sur « Tout faire » (F5) ou procédez étape par étape.")
+        self.status_label.setText(tr("{source} — cliquez sur « Tout faire » (F5) ou procédez étape par étape.",
+                                     source=src.describe()))
         self._update_enabled()
 
     def load_image(self, path: str) -> None:
@@ -650,7 +678,7 @@ class MainWindow(QMainWindow):
         try:
             img = read_image(path)
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(self, APP_NAME, f"Impossible d'ouvrir l'image :\n{exc}")
+            QMessageBox.critical(self, APP_NAME, tr("Impossible d'ouvrir l'image :\n{error}", error=exc))
             return
         self.qsettings.setValue("last_dir", os.path.dirname(path))
         if self.source is not None:
@@ -659,7 +687,7 @@ class MainWindow(QMainWindow):
         self.pipeline = None
         self._image_path = path
         self.setWindowTitle(f"{os.path.basename(path)} — {APP_NAME}")
-        self.source_label.setText("Image seule (pas de vidéo)")
+        self.source_label.setText(tr("Image seule (pas de vidéo)"))
         self._set_stacked(img)
         self.tabs.setCurrentIndex(TAB_WAVELETS)
         self._update_enabled()
@@ -694,22 +722,23 @@ class MainWindow(QMainWindow):
         return os.path.join(folder, base.split(" … ")[0] + suffix)
 
     def _save(self, img: np.ndarray, suffix: str, title: str) -> None:
-        filters = list(SAVE_FILTERS)
+        formats = save_filters()
+        filters = list(formats)
         last = str(self.qsettings.value("save_filter", filters[0]))
         path, chosen = QFileDialog.getSaveFileName(self, title, self._default_name(suffix + ".tif"),
                                                    ";;".join(filters), last if last in filters else filters[0])
         if not path:
             return
-        ext, bits = SAVE_FILTERS.get(chosen, (".tif", 16))
+        ext, bits = formats.get(chosen, (".tif", 16))
         if not os.path.splitext(path)[1]:
             path += ext
         try:
             save_image(path, img, bits=bits)
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(self, APP_NAME, f"Enregistrement impossible :\n{exc}")
+            QMessageBox.critical(self, APP_NAME, tr("Enregistrement impossible :\n{error}", error=exc))
             return
         self.qsettings.setValue("save_filter", chosen)
-        self.status_label.setText(f"Enregistré : {path}")
+        self.status_label.setText(tr("Enregistré : {path}", path=path))
 
     def save_final(self) -> None:
         if self.stacked is None:
@@ -719,11 +748,11 @@ class MainWindow(QMainWindow):
             img = finish(self.stacked, self.settings)
         finally:
             QApplication.restoreOverrideCursor()
-        self._save(img, "_planstax", "Enregistrer l'image traitée")
+        self._save(img, "_planstax", tr("Enregistrer l'image traitée"))
 
     def save_stacked(self) -> None:
         if self.stacked is not None:
-            self._save(self.stacked, "_empilement", "Enregistrer l'empilement brut")
+            self._save(self.stacked, "_empilement", tr("Enregistrer l'empilement brut"))
 
     # =================================================================== processing
     def _busy(self) -> bool:
@@ -737,7 +766,7 @@ class MainWindow(QMainWindow):
         task.progress.connect(self._on_progress)
         task.succeeded.connect(on_success)
         task.failed.connect(self._on_failed)
-        task.cancelled.connect(lambda: self.status_label.setText("Traitement annulé."))
+        task.cancelled.connect(lambda: self.status_label.setText(tr("Traitement annulé.")))
         task.finished.connect(self._on_task_finished)
         self._task = task
         self.status_label.setText(message)
@@ -752,7 +781,7 @@ class MainWindow(QMainWindow):
         self.status_label.setText(message)
 
     def _on_failed(self, message: str) -> None:
-        self.status_label.setText("Erreur pendant le traitement.")
+        self.status_label.setText(tr("Erreur pendant le traitement."))
         QMessageBox.critical(self, APP_NAME, message)
 
     def _on_task_finished(self) -> None:
@@ -764,7 +793,7 @@ class MainWindow(QMainWindow):
     def _cancel_task(self) -> None:
         if self._task is not None:
             self._task.cancel()
-            self.status_label.setText("Annulation…")
+            self.status_label.setText(tr("Annulation…"))
 
     def _prepare_points(self, progress, cancel) -> None:
         p = self.pipeline
@@ -784,17 +813,18 @@ class MainWindow(QMainWindow):
             self._prepare_points(progress, cancel)
             p.place_points()
 
-        self._run(fn, lambda _: self._after_points(), "Analyse de la vidéo…")
+        self._run(fn, lambda _: self._after_points(), tr("Analyse de la vidéo…"))
 
     def _after_points(self) -> None:
         self._update_analysis_views()
         self._view_mode = "reference"
         self._refresh_view(keep_view=False)
         if len(self.pipeline.points):
-            self.status_label.setText(
-                f"{len(self.pipeline.points)} points d'alignement placés. Ajustez-les si besoin puis cliquez sur « Aligner ».")
+            self.status_label.setText(tr(
+                "{n} points d'alignement placés. Ajustez-les si besoin puis cliquez sur « Aligner ».",
+                n=len(self.pipeline.points)))
         else:
-            self.status_label.setText("Aucun point d'alignement placé : l'explication est dans l'onglet Alignement.")
+            self.status_label.setText(tr("Aucun point d'alignement placé : l'explication est dans l'onglet Alignement."))
 
     def align(self) -> None:
         if self.pipeline is None:
@@ -805,16 +835,16 @@ class MainWindow(QMainWindow):
             self._prepare_points(lambda f, m: progress(0.3 * f, m), cancel)
             p.align(lambda f, m: progress(0.3 + 0.7 * f, m), cancel)
 
-        self._run(fn, lambda _: self._after_align(), "Alignement…")
+        self._run(fn, lambda _: self._after_align(), tr("Alignement…"))
 
     def _after_align(self) -> None:
         self._update_analysis_views()
         al = self.pipeline.alignment
         valid = float(al.local_valid.mean() * 100) if al.local_valid.size else 0.0
-        self.align_label.setText(
-            f"Alignement terminé : {len(self.source)} images, {len(self.pipeline.points)} points, "
-            f"{valid:.0f} % des mesures locales fiables.")
-        self.status_label.setText("Alignement terminé. Vérifiez la sélection puis empilez.")
+        self.align_label.setText(tr(
+            "Alignement terminé : {frames} images, {points} points, {valid} % des mesures locales fiables.",
+            frames=len(self.source), points=len(self.pipeline.points), valid=f"{valid:.0f}"))
+        self.status_label.setText(tr("Alignement terminé. Vérifiez la sélection puis empilez."))
         self.tabs.setCurrentIndex(TAB_SELECT)
 
     def stack(self) -> None:
@@ -829,7 +859,7 @@ class MainWindow(QMainWindow):
                 return p.stack(lambda f, m: progress(0.7 + 0.3 * f, m), cancel)
             return p.stack(progress, cancel)
 
-        self._run(fn, self._after_stack, "Empilement…")
+        self._run(fn, self._after_stack, tr("Empilement…"))
 
     def do_all(self) -> None:
         if self.pipeline is None:
@@ -843,19 +873,19 @@ class MainWindow(QMainWindow):
             p.align(lambda f, m: progress(0.3 + 0.45 * f, m), cancel)
             return p.stack(lambda f, m: progress(0.75 + 0.25 * f, m), cancel)
 
-        self._run(fn, lambda img: self._after_stack(img, goto=TAB_WAVELETS), "Traitement complet…")
+        self._run(fn, lambda img: self._after_stack(img, goto=TAB_WAVELETS), tr("Traitement complet…"))
 
     def _after_stack(self, img: np.ndarray, goto: int | None = None) -> None:
         p = self.pipeline
         self._update_analysis_views()
         n_sel = len(p.selected)
-        self.stack_label.setText(
-            f"{n_sel} images empilées sur {len(self.source)}, {len(p.points)} points d'alignement, "
-            f"{img.shape[1]}×{img.shape[0]} px.")
+        self.stack_label.setText(tr(
+            "{stacked} images empilées sur {frames}, {points} points d'alignement, {width}×{height} px.",
+            stacked=n_sel, frames=len(self.source), points=len(p.points), width=img.shape[1], height=img.shape[0]))
         self._set_stacked(img)
         if goto is not None:
             self.tabs.setCurrentIndex(goto)
-        self.status_label.setText(f"Empilement terminé. Réglez les ondelettes puis enregistrez ({CMD}+S).")
+        self.status_label.setText(tr("Empilement terminé. Réglez les ondelettes puis enregistrez ({key}+S).", key=CMD))
 
     def _set_stacked(self, img: np.ndarray) -> None:
         self.stacked = img
@@ -874,7 +904,7 @@ class MainWindow(QMainWindow):
             self.pipeline.points = np.zeros((0, 2), dtype=np.int32)
             self.pipeline.alignment = None
             self.view.set_points(None)
-            self.points_label.setText("Paramètres modifiés : cliquez sur « Placer les points ».")
+            self.points_label.setText(tr("Paramètres modifiés : cliquez sur « Placer les points »."))
 
     def _invalidate_reference(self) -> None:
         if self.pipeline is not None:
@@ -882,7 +912,7 @@ class MainWindow(QMainWindow):
             self.pipeline.points = np.zeros((0, 2), dtype=np.int32)
             self.pipeline.alignment = None
             self.view.set_points(None)
-            self.points_label.setText("Paramètres modifiés : cliquez sur « Placer les points ».")
+            self.points_label.setText(tr("Paramètres modifiés : cliquez sur « Placer les points »."))
 
     def _replace_points(self) -> None:
         p = self.pipeline
@@ -900,7 +930,7 @@ class MainWindow(QMainWindow):
         h, w = p.reference.shape
         xi, yi = int(round(x)), int(round(y))
         if not (half <= xi < w - half and half <= yi < h - half):
-            self.status_label.setText("Trop près du bord pour placer un point ici.")
+            self.status_label.setText(tr("Trop près du bord pour placer un point ici."))
             return
         p.set_points(np.vstack([p.points, [[xi, yi]]]))
         self._update_points_overlay()
@@ -920,7 +950,7 @@ class MainWindow(QMainWindow):
         n = len(p.points) if p is not None else 0
         text = ""
         if p is not None and p.reference is not None:
-            text = f"{n} point(s) d'alignement."
+            text = tr("{n} point(s) d'alignement.", n=n)
             if p.points_report is not None:
                 # Placement explanation; the count reflects manual additions/removals.
                 lines = p.points_report.explain(p.settings.align).split("\n")
@@ -949,7 +979,8 @@ class MainWindow(QMainWindow):
         sel = p.select()
         self.quality_plot.set_data(p.analysis.quality, len(sel))
         n = len(self.source)
-        self.select_label.setText(f"{len(sel)} images retenues sur {n} ({100 * len(sel) / n:.0f} %)")
+        self.select_label.setText(tr("{kept} images retenues sur {frames} ({percent} %)", kept=len(sel), frames=n,
+                                     percent=f"{100 * len(sel) / n:.0f}"))
 
     def _on_plot_cutoff(self, fraction: float) -> None:
         p = self.pipeline
@@ -1006,19 +1037,19 @@ class MainWindow(QMainWindow):
         try:
             frame = self.source.frame(idx)
         except Exception as exc:  # noqa: BLE001
-            self.frame_info.setText(f"Lecture impossible : {exc}")
+            self.frame_info.setText(tr("Lecture impossible : {error}", error=exc))
             return
         self.view.set_image(frame, keep_view)
         self.view.set_points(None)
-        info = f"n° {idx + 1}/{len(self.source)}"
+        info = tr("n° {index}/{frames}", index=idx + 1, frames=len(self.source))
         if a is not None:
             rank = int(np.flatnonzero(a.order == idx)[0]) + 1
             q = a.quality[idx] / max(a.quality.max(), 1e-12) * 100
             sel = self.pipeline.selected
             kept = bool(np.any(sel == idx)) if len(sel) else None
-            info += f" · rang {rank} · qualité {q:.0f} %"
+            info += tr(" · rang {rank} · qualité {quality} %", rank=rank, quality=f"{q:.0f}")
             if kept is not None:
-                info += " · retenue" if kept else " · écartée"
+                info += tr(" · retenue") if kept else tr(" · écartée")
         self.frame_info.setText(info)
 
     def _toggle_before(self, on: bool) -> None:
@@ -1063,7 +1094,7 @@ class MainWindow(QMainWindow):
 
     def _on_gain_changed(self) -> None:
         for label, layer in zip(self.layer_factor, self.settings.wavelet.layers):
-            label.setText(f"×{layer.gain:.1f}".replace(".", ","))
+            label.setText("×" + number(layer.gain, 1))
         self._request_preview()
 
     def _reset_wavelets(self) -> None:
@@ -1091,7 +1122,8 @@ class MainWindow(QMainWindow):
         self.settings.post.shift_b = (round(bx, 2), round(by, 2))
         self._settings_to_widgets()
         self._request_preview()
-        self.status_label.setText(f"Décalages mesurés — rouge : ({rx:+.2f}, {ry:+.2f}) px, bleu : ({bx:+.2f}, {by:+.2f}) px")
+        self.status_label.setText(tr("Décalages mesurés — rouge : ({rx}, {ry}) px, bleu : ({bx}, {by}) px",
+                                     rx=f"{rx:+.2f}", ry=f"{ry:+.2f}", bx=f"{bx:+.2f}", by=f"{by:+.2f}"))
 
     def _auto_balance(self) -> None:
         if self.stacked is None or self.stacked.ndim != 3:
@@ -1124,24 +1156,24 @@ class MainWindow(QMainWindow):
                 a = m.addAction(name)
                 a.triggered.connect(lambda _=False, n=name: self._load_preset(n))
         else:
-            a = m.addAction("(aucun préréglage)")
+            a = m.addAction(tr("(aucun préréglage)"))
             a.setEnabled(False)
         m.addSeparator()
-        m.addAction("Enregistrer les réglages actuels…", self._save_preset)
-        m.addAction("Importer depuis RegiStax 6…", self._import_registax)
-        m.addAction("Réglages par défaut", self._default_settings)
+        m.addAction(tr("Enregistrer les réglages actuels…"), self._save_preset)
+        m.addAction(tr("Importer depuis RegiStax 6…"), self._import_registax)
+        m.addAction(tr("Réglages par défaut"), self._default_settings)
         m.addSeparator()
-        m.addAction("Ouvrir le dossier des préréglages",
+        m.addAction(tr("Ouvrir le dossier des préréglages"),
                     lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(presets_dir())))
 
     def _load_preset(self, name: str) -> None:
         try:
             self.settings = load_preset(name)
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(self, APP_NAME, f"Préréglage illisible :\n{exc}")
+            QMessageBox.critical(self, APP_NAME, tr("Préréglage illisible :\n{error}", error=exc))
             return
         self._apply_new_settings()
-        self.status_label.setText(f"Préréglage « {name} » chargé.")
+        self.status_label.setText(tr("Préréglage « {name} » chargé.", name=name))
 
     def _default_settings(self) -> None:
         self.settings = Settings()
@@ -1155,14 +1187,14 @@ class MainWindow(QMainWindow):
         self._request_preview()
 
     def _save_preset(self) -> None:
-        name, ok = QInputDialog.getText(self, "Enregistrer un préréglage", "Nom du préréglage :")
+        name, ok = QInputDialog.getText(self, tr("Enregistrer un préréglage"), tr("Nom du préréglage :"))
         if ok and name.strip():
             save_preset(name.strip(), self.settings)
-            self.status_label.setText(f"Préréglage « {name.strip()} » enregistré.")
+            self.status_label.setText(tr("Préréglage « {name} » enregistré.", name=name.strip()))
 
     def _import_registax(self) -> None:
         default = r"C:\Program Files (x86)\RegiStax 6"
-        folder = QFileDialog.getExistingDirectory(self, "Dossier de RegiStax 6",
+        folder = QFileDialog.getExistingDirectory(self, tr("Dossier de RegiStax 6"),
                                                   default if os.path.isdir(default) else self._last_dir())
         if not folder:
             return
@@ -1175,14 +1207,15 @@ class MainWindow(QMainWindow):
                     lines.append(f"  {name} : " + ", ".join(str(p) for p in pos))
             QMessageBox.information(
                 self, APP_NAME,
-                "Préréglages importés : " + ", ".join(imported) + ".\n\n"
-                "Points d'alignement, sélection et type d'ondelettes sont repris tels quels. "
-                "Les curseurs d'ondelettes, eux, ne peuvent pas être convertis (la formule de "
-                "RegiStax n'est pas publique) : ils sont laissés au neutre, à régler à l'œil.\n\n"
-                "Positions RegiStax d'origine (couches 1 à 6, 10 = neutre) :\n" + "\n".join(lines))
+                tr("Préréglages importés : {names}.\n\n"
+                   "Points d'alignement, sélection et type d'ondelettes sont repris tels quels. "
+                   "Les curseurs d'ondelettes, eux, ne peuvent pas être convertis (la formule de "
+                   "RegiStax n'est pas publique) : ils sont laissés au neutre, à régler à l'œil.\n\n"
+                   "Positions RegiStax d'origine (couches 1 à 6, 10 = neutre) :\n",
+                   names=", ".join(imported)) + "\n".join(lines))
         else:
-            QMessageBox.warning(self, APP_NAME, "Aucun fichier de réglages RegiStax (estimate-*.ini, "
-                                                "wavelet-*.ini…) trouvé dans ce dossier.")
+            QMessageBox.warning(self, APP_NAME, tr("Aucun fichier de réglages RegiStax (estimate-*.ini, "
+                                                   "wavelet-*.ini…) trouvé dans ce dossier."))
 
     def _load_last_settings(self) -> Settings:
         path = os.path.join(config_dir(), "last.json")
@@ -1228,28 +1261,46 @@ class MainWindow(QMainWindow):
         theme.apply(QApplication.instance(), key)
         self._apply_overlay_color()
 
+    def _set_language(self, code: str | None) -> None:
+        """Remember the language (None: the system's); the texts change at the next start."""
+        for c, a in self.language_actions.items():
+            a.setChecked(c == code)
+        if code is None:
+            self.qsettings.remove("language")
+        else:
+            self.qsettings.setValue("language", code)
+        self.qsettings.sync()
+        from .. import i18n
+        now = tr("Redémarrez PlanStax pour changer de langue.")
+        running = i18n.language()
+        i18n.set_language(code)            # the same message in the language chosen…
+        later = tr("Redémarrez PlanStax pour changer de langue.")
+        i18n.set_language(running)         # …while the window keeps its language until then
+        QMessageBox.information(self, APP_NAME, now if later == now else f"{later}\n\n{now}")
+
     def _apply_overlay_color(self) -> None:
         night = self.qsettings.value("theme", "dark") == "night"
         self.view.set_point_color(QColor(255, 60, 40) if night else QColor(80, 220, 120))
 
     def _show_help(self) -> None:
-        QMessageBox.information(self, "Guide rapide", (
-            f"1. Ouvrez une vidéo SER ou AVI ({CMD}+O, ou glisser-déposer).\n"
+        QMessageBox.information(self, tr("Guide rapide"), tr(
+            "1. Ouvrez une vidéo SER ou AVI ({key}+O, ou glisser-déposer).\n"
             "2. Cliquez sur « Tout faire » (F5) : analyse de la qualité, image de référence, "
             "points d'alignement, alignement, sélection et empilement.\n"
             "3. Onglet Ondelettes : montez l'accentuation des couches 1 à 3 (30 à 50 pour commencer), "
             "et utilisez le débruitage des couches 1-2 si le bruit apparaît.\n"
-            "4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux.\n"
-            f"5. Enregistrez ({CMD}+S) en TIFF 16 bits.\n\n"
+            "4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux, orientation.\n"
+            "5. Enregistrez ({key}+S) en TIFF 16 bits.\n\n"
             "Plusieurs vidéos : déposez-les dans le dossier « input », puis Fichier → Traitement "
-            f"par lot ({CMD}+L). Une image par vidéo est écrite dans le dossier « output ».\n\n"
+            "par lot ({key}+L). Une image par vidéo est écrite dans le dossier « output ».\n\n"
             "Mosaïque (Lune, Soleil, paysage pris en plusieurs champs) : cochez « Assembler les "
-            f"images en une mosaïque » dans le traitement par lot, ou Fichier → Assembler une mosaïque "
-            f"({MOSAIC_KEY_TEXT}). Prévoyez environ 25 % de recouvrement entre champs voisins.\n\n"
-            f"Pour affiner : réglez les points dans l'onglet Alignement ({CMD}+clic pour en ajouter, "
+            "images en une mosaïque » dans le traitement par lot, ou Fichier → Assembler une mosaïque "
+            "({mosaic_key}). Prévoyez environ 25 % de recouvrement entre champs voisins.\n\n"
+            "Pour affiner : réglez les points dans l'onglet Alignement ({key}+clic pour en ajouter, "
             "Maj+clic pour en retirer), le pourcentage d'images gardées dans l'onglet Sélection, "
             "et la sélection locale dans l'onglet Empilement.\n\n"
-            "Touche B : avant/après · F : ajuster · 1 : 100 % · P : afficher les points."))
+            "Touche B : avant/après · F : ajuster · 1 : 100 % · P : afficher les points.",
+            key=CMD, mosaic_key=MOSAIC_KEY_TEXT))
 
     def open_batch(self) -> None:
         if self._busy():
@@ -1272,18 +1323,19 @@ class MainWindow(QMainWindow):
         try:
             path = create_desktop_shortcut()
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.warning(self, APP_NAME, f"Impossible de créer le raccourci :\n{exc}")
+            QMessageBox.warning(self, APP_NAME, tr("Impossible de créer le raccourci :\n{error}", error=exc))
             return
-        QMessageBox.information(self, APP_NAME, f"Raccourci créé sur le Bureau :\n{path}")
+        QMessageBox.information(self, APP_NAME, tr("Raccourci créé sur le Bureau :\n{path}", path=path))
 
     def _show_about(self) -> None:
-        QMessageBox.about(self, f"À propos de {APP_NAME}", (
-            f"<b>{APP_NAME} {__version__}</b><br>"
-            "Empilement « lucky imaging » et ondelettes pour l'imagerie planétaire.<br><br>"
-            "Programme indépendant écrit de zéro, inspiré du déroulement de travail de RegiStax 6 "
-            "(sans lien avec RegiStax ni son auteur) : alignement multipoints, sélection des "
-            "meilleures images, empilement local, ondelettes à 6 couches, mosaïques.<br><br>"
-            "Formats : SER, AVI, FITS, TIFF, PNG, JPEG.<br>Licence MIT. Copyright Bernard Allouche"))
+        QMessageBox.about(self, tr("À propos de {app}", app=APP_NAME), (
+            f"<b>{APP_NAME} {__version__}</b><br>" + tr(
+                "Empilement « lucky imaging » et ondelettes pour l'imagerie planétaire.<br><br>"
+                "Programme indépendant écrit de zéro, inspiré du déroulement de travail de RegiStax 6 "
+                "(sans lien avec RegiStax ni son auteur) : alignement multipoints, sélection des "
+                "meilleures images, empilement local, ondelettes à 6 couches, mosaïques.<br><br>"
+                "Formats : SER, AVI, MP4, FITS, TIFF, PNG, JPEG.<br>Interface : français, anglais, espagnol.")
+            + "<br>Licence MIT. Copyright Bernard Allouche"))
 
     def closeEvent(self, event) -> None:
         if self._task is not None and self._task.isRunning():

@@ -32,8 +32,13 @@ UTILISATION
     1. Ctrl+O : ouvrir une vidéo (ou la glisser dans la fenêtre).
     2. F5 « Tout faire » : alignement, sélection des meilleures images, empilement.
     3. Onglet Ondelettes : monter l'accentuation des couches 1 à 3 (30 à 50 pour commencer).
-    4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux.
+    4. Onglet Finitions : alignement RVB automatique, balance des couleurs, niveaux,
+       orientation (quarts de tour, miroirs, rotation fine de ±90° au dixième de degré).
     5. Ctrl+S : enregistrer (TIFF 16 bits conseillé).
+
+  Langue : français, anglais ou espagnol, selon celle du système. Pour en changer : menu
+  Affichage > « Langue / Language / Idioma », puis redémarrez. En ligne de commande :
+       ./planstax.sh --lang en batch
 
   Plusieurs vidéos d'un coup : déposez-les dans le dossier « input » (créé à côté de
   planstax.sh), puis Fichier > Traitement par lot (Ctrl+L) > Démarrer ; une image par vidéo

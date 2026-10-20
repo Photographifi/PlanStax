@@ -29,11 +29,15 @@ def _report(exc: BaseException) -> None:
             fh.write(text)
     except OSError:
         log = "(impossible d'écrire le journal)"
+    message = "PlanStax n'a pas pu démarrer :\n\n{error}\n\nDétails enregistrés dans :\n{log}"
+    try:
+        from planstax.i18n import tr
+        text = tr(message, error=exc, log=log)
+    except Exception:  # noqa: BLE001 - even the translations may be what failed to load
+        text = message.format(error=exc, log=log) + f"\n\n(PlanStax could not start; details in {log})"
     try:
         import ctypes
-        ctypes.windll.user32.MessageBoxW(
-            None, f"PlanStax n'a pas pu démarrer :\n\n{exc}\n\nDétails enregistrés dans :\n{log}",
-            "PlanStax", 0x10)
+        ctypes.windll.user32.MessageBoxW(None, text, "PlanStax", 0x10)
     except Exception:  # noqa: BLE001
         pass
 

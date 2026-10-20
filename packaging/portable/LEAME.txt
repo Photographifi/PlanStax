@@ -1,0 +1,59 @@
+PlanStax {version} — apilado y ondículas para la imagen planetaria
+====================================================================
+
+INSTALACIÓN (no hay nada que instalar)
+  1. Clic derecho en el archivo .zip > «Extraer todo…» > Extraer.
+     Importante: no inicie el programa desde dentro del .zip.
+  2. En la carpeta extraída, haga doble clic en PlanStax.exe.
+     El primer inicio puede tardar unos diez segundos.
+  3. Para tenerlo en el Escritorio: menú Ayuda > «Crear un acceso directo en el Escritorio».
+
+  La carpeta PlanStax puede guardarse donde quiera (Documentos, memoria USB…).
+  Para desinstalar: basta con borrar la carpeta.
+
+USO EN 5 PASOS
+  1. Ctrl+O: abrir un vídeo SER o AVI (o arrastrarlo a la ventana).
+  2. F5 «Hacer todo»: alineación, selección de las mejores imágenes, apilado.
+  3. Pestaña Ondículas: subir el realce de las capas 1 a 3 (de 30 a 50 para
+     empezar); un poco de reducción de ruido en las capas 1-2 si aparece ruido.
+  4. Pestaña Acabado: alineación RGB automática, balance de color, niveles,
+     orientación (cuartos de vuelta, espejos y rotación fina de ±90° por décimas de grado).
+  5. Ctrl+S: guardar (se aconseja TIFF de 16 bits).
+
+  Tecla B: comparar antes/después · F: ajustar a la ventana · F1: guía rápida.
+
+IDIOMA
+  PlanStax se muestra en francés, inglés o español, según el idioma de Windows.
+  Para cambiarlo: menú Ver > «Langue / Language / Idioma» y luego reinicie.
+
+VARIOS VÍDEOS DE UNA VEZ (procesamiento por lotes)
+  1. Deje los vídeos en la carpeta «input» (junto a PlanStax.exe).
+  2. En PlanStax: Archivo > Procesamiento por lotes (Ctrl+L) > Iniciar.
+  3. Se escribe una imagen por vídeo en la carpeta «output».
+  Ajuste primero un vídeo a mano (ondículas incluidas): el lote aplica los ajustes
+  actuales, o el preajuste elegido en la ventana del procesamiento por lotes.
+
+MOSAICO (Luna, Sol, paisaje tomado en varios campos)
+  Marque «Montar las imágenes en un mosaico» en la ventana del procesamiento por
+  lotes: al final, las imágenes que se solapan se montan en output\mosaique.tif.
+  Las ondículas se aplican imagen por imagen, los niveles y los colores una sola vez,
+  al mosaico entero: no quedan zonas distintas en el cielo.
+  Para imágenes ya hechas: Archivo > Montar un mosaico (Ctrl+M).
+  Prevea un 25 % de solapamiento aproximadamente entre campos vecinos.
+
+SI ALGO VA MAL
+  - Si Windows muestra «Windows protegió su PC»: haga clic en «Más información»
+    y luego en «Ejecutar de todas formas».
+  - Si el programa no arranca, un mensaje lo indica y los detalles se guardan
+    en %APPDATA%\PlanStax\erreur-demarrage.txt
+    (para enviarlo a la persona que le dio PlanStax).
+
+REQUISITOS
+  Windows 10 u 11, 64 bits. Se aconsejan 8 GB de memoria para los vídeos grandes.
+
+ACERCA DE
+  PlanStax es software libre (licencia MIT), escrito en Python. PlanStax.exe es el
+  intérprete oficial de Python (firmado por la Python Software Foundation),
+  renombrado; el programa en sí está en runtime\site-packages\planstax.
+  Bibliotecas incluidas: Python, NumPy, OpenCV, Qt (PySide6), tifffile; sus licencias
+  se encuentran en las carpetas correspondientes.

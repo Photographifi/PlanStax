@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QComboBox, QDialog,
 
 from ..batch import FORMATS, MosaicResult, list_images, make_mosaics
 from ..core import Cancelled
+from ..i18n import megabytes, tr
 from ..io import IMAGE_EXTENSIONS
 from ..paths import default_batch_folders
 from ..settings import list_presets, load_preset
@@ -26,7 +27,7 @@ OPEN_LIMIT = 50e6  # px: larger mosaics would need too much memory for the wavel
 
 def _image_filter() -> str:
     patterns = [f"*{e}" for e in IMAGE_EXTENSIONS] + [f"*{e.upper()}" for e in IMAGE_EXTENSIONS]
-    return f"Images ({' '.join(patterns)})"
+    return f"{tr('Images')} ({' '.join(patterns)})"
 
 
 def preview_pixmap(result: MosaicResult, index: int = 0, width: int = 0) -> QPixmap:
@@ -72,7 +73,7 @@ class MosaicWorker(QThread):
         except Cancelled:
             return
         except MemoryError:
-            self.failed.emit("mémoire insuffisante")
+            self.failed.emit(tr("mémoire insuffisante"))
         except Exception as exc:  # noqa: BLE001
             traceback.print_exc()
             self.failed.emit(str(exc) or type(exc).__name__)
@@ -86,7 +87,7 @@ class MosaicDialog(QDialog):
 
     def __init__(self, qsettings: QSettings, open_image=None, current_settings=None, parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Assembler une mosaïque")
+        self.setWindowTitle(tr("Assembler une mosaïque"))
         self.resize(980, 640)
         self.qs = qsettings
         self._open_image = open_image
@@ -97,9 +98,9 @@ class MosaicDialog(QDialog):
         self._chosen: list[str] | None = None  # images picked one by one instead of a folder
 
         self.folder_edit = QLineEdit(str(self.qs.value("mosaic/folder", default_batch_folders()[1])))
-        browse = QPushButton("Parcourir…")
+        browse = QPushButton(tr("Parcourir…"))
         browse.clicked.connect(self._browse)
-        pick = QPushButton("Choisir des images…")
+        pick = QPushButton(tr("Choisir des images…"))
         pick.clicked.connect(self._pick)
         row = QWidget()
         h = QHBoxLayout(row)
@@ -107,32 +108,32 @@ class MosaicDialog(QDialog):
         h.addWidget(self.folder_edit, 1)
         h.addWidget(browse)
         h.addWidget(pick)
-        self.raw_check = QCheckBox("Empilements bruts (images « _brut ») plutôt que les images traitées")
+        self.raw_check = QCheckBox(tr("Empilements bruts (images « _brut ») plutôt que les images traitées"))
         self.raw_check.setChecked(str(self.qs.value("mosaic/raw", False)).lower() == "true")
         self.raw_check.toggled.connect(self.refresh)
         self.format_combo = QComboBox()
         for label, ext, bits in FORMATS:
-            self.format_combo.addItem(label, (ext, bits))
+            self.format_combo.addItem(tr(label), (ext, bits))
         self.format_combo.setCurrentIndex(max(0, int(self.qs.value("mosaic/format", 0))))
         self.process_combo = QComboBox()
-        self.process_combo.addItem("Aucun : assembler les images telles quelles", "")
+        self.process_combo.addItem(tr("Aucun : assembler les images telles quelles"), "")
         if current_settings is not None:
-            self.process_combo.addItem("Ondelettes et finitions des réglages actuels", "*")
+            self.process_combo.addItem(tr("Ondelettes et finitions des réglages actuels"), "*")
         for name in list_presets():
-            self.process_combo.addItem(f"Ondelettes et finitions du préréglage « {name} »", name)
+            self.process_combo.addItem(tr("Ondelettes et finitions du préréglage « {name} »", name=name), name)
         self.process_combo.setCurrentIndex(max(0, self.process_combo.findData(self.qs.value("mosaic/process", ""))))
-        self.process_combo.setToolTip(
+        self.process_combo.setToolTip(tr(
             "Pour des empilements bruts : les ondelettes sont appliquées à chaque image, les niveaux\n"
             "et les couleurs une seule fois, à la mosaïque entière (un ciel brûlé dans une image et\n"
-            "pas dans sa voisine laisserait des zones visibles).")
+            "pas dans sa voisine laisserait des zones visibles)."))
         form = QFormLayout()
-        form.addRow("Images à assembler :", row)
+        form.addRow(tr("Images à assembler :"), row)
         form.addRow("", self.raw_check)
-        form.addRow("Traitement :", self.process_combo)
-        form.addRow("Format :", self.format_combo)
+        form.addRow(tr("Traitement :"), self.process_combo)
+        form.addRow(tr("Format :"), self.format_combo)
 
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Image", "Taille", "État"])
+        self.table.setHorizontalHeaderLabels([tr("Image"), tr("Taille"), tr("État")])
         self.table.verticalHeader().hide()  # the names carry the numbers drawn on the preview
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
@@ -140,7 +141,7 @@ class MosaicDialog(QDialog):
         hh.setSectionResizeMode(COL_NAME, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(COL_SIZE, QHeaderView.ResizeMode.ResizeToContents)
         hh.setSectionResizeMode(COL_STATE, QHeaderView.ResizeMode.Stretch)
-        self.preview = QLabel("L'aperçu de la mosaïque s'affichera ici.")
+        self.preview = QLabel(tr("L'aperçu de la mosaïque s'affichera ici."))
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumSize(320, 320)
         split = QSplitter()
@@ -151,25 +152,25 @@ class MosaicDialog(QDialog):
         self.report = QPlainTextEdit()
         self.report.setReadOnly(True)
         self.report.setMaximumHeight(110)
-        self.report.setPlaceholderText(
+        self.report.setPlaceholderText(tr(
             "Les images doivent se recouvrir d'environ 25 % et avoir été traitées avec les mêmes "
-            "réglages. La mosaïque est enregistrée dans le dossier des images (mosaique.tif).")
+            "réglages. La mosaïque est enregistrée dans le dossier des images (mosaique.tif)."))
         self.progress = QProgressBar()
         self.progress.setRange(0, 1000)
         self.progress.setFormat("")
 
-        self.start_btn = QPushButton("Assembler")
+        self.start_btn = QPushButton(tr("Assembler"))
         self.start_btn.setObjectName("primary")
         self.start_btn.clicked.connect(self.start)
-        self.cancel_btn = QPushButton("Annuler")
+        self.cancel_btn = QPushButton(tr("Annuler"))
         self.cancel_btn.setEnabled(False)
         self.cancel_btn.clicked.connect(self.cancel)
-        self.open_btn = QPushButton("Ouvrir dans PlanStax (ondelettes)")
+        self.open_btn = QPushButton(tr("Ouvrir dans PlanStax (ondelettes)"))
         self.open_btn.setEnabled(False)
         self.open_btn.clicked.connect(self._open_result)
-        folder_btn = QPushButton("Ouvrir le dossier")
+        folder_btn = QPushButton(tr("Ouvrir le dossier"))
         folder_btn.clicked.connect(self._open_folder)
-        close_btn = QPushButton("Fermer")
+        close_btn = QPushButton(tr("Fermer"))
         close_btn.clicked.connect(self.reject)
         buttons = QHBoxLayout()
         buttons.addWidget(folder_btn)
@@ -191,14 +192,14 @@ class MosaicDialog(QDialog):
 
     # ------------------------------------------------------------------ inputs
     def _browse(self) -> None:
-        folder = QFileDialog.getExistingDirectory(self, "Dossier des images", self.folder_edit.text())
+        folder = QFileDialog.getExistingDirectory(self, tr("Dossier des images"), self.folder_edit.text())
         if folder:
             self.folder_edit.setText(os.path.normpath(folder))
             self._folder_mode()
 
     def _pick(self) -> None:
-        paths, _ = QFileDialog.getOpenFileNames(self, "Images à assembler", self.folder_edit.text(),
-                                                f"{_image_filter()};;Tous les fichiers (*)")
+        paths, _ = QFileDialog.getOpenFileNames(self, tr("Images à assembler"), self.folder_edit.text(),
+                                                f"{_image_filter()};;{tr('Tous les fichiers (*)')}")
         if paths:
             self._chosen = [os.path.normpath(p) for p in paths]
             self.folder_edit.setText(os.path.dirname(self._chosen[0]))
@@ -221,9 +222,8 @@ class MosaicDialog(QDialog):
             self._paths = list_images(self.folder_edit.text().strip(), raw=self.raw_check.isChecked())
         self.table.setRowCount(len(self._paths))
         for row, path in enumerate(self._paths):
-            size = os.path.getsize(path) / 2 ** 20
             for col, text in ((COL_NAME, f"{row + 1}. {os.path.basename(path)}"),
-                              (COL_SIZE, f"{size:,.0f} Mo".replace(",", " ") if size >= 1 else "< 1 Mo"),
+                              (COL_SIZE, megabytes(os.path.getsize(path))),
                               (COL_STATE, "")):
                 item = QTableWidgetItem(text)
                 if col == COL_SIZE:
@@ -231,9 +231,9 @@ class MosaicDialog(QDialog):
                 self.table.setItem(row, col, item)
         self.start_btn.setEnabled(len(self._paths) >= 2)
         if len(self._paths) < 2:
-            self.progress.setFormat("Il faut au moins deux images qui se recouvrent.")
+            self.progress.setFormat(tr("Il faut au moins deux images qui se recouvrent."))
         else:
-            self.progress.setFormat(f"{len(self._paths)} images")
+            self.progress.setFormat(tr("{n} images", n=len(self._paths)))
 
     # ------------------------------------------------------------------ run
     def start(self) -> None:
@@ -271,7 +271,7 @@ class MosaicDialog(QDialog):
         try:
             return load_preset(choice)
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(self, self.windowTitle(), f"Préréglage illisible :\n{exc}")
+            QMessageBox.critical(self, self.windowTitle(), tr("Préréglage illisible :\n{error}", error=exc))
             return False
 
     def _on_progress(self, fraction: float, message: str) -> None:
@@ -285,7 +285,7 @@ class MosaicDialog(QDialog):
             self.table.item(row, COL_STATE).setText(plan.state(row))
         text = plan.explain()
         if result.outputs:
-            text += "\n" + "\n".join(f"Enregistrée : {p}" for p in result.outputs)
+            text += "\n" + "\n".join(tr("Enregistrée : {path}", path=p) for p in result.outputs)
             self._show_preview()
             group = result.groups[0]
             processed = self.worker is not None and self.worker.settings is not None
@@ -293,14 +293,15 @@ class MosaicDialog(QDialog):
             self.open_btn.setEnabled(self._open_image is not None and group.pixels <= OPEN_LIMIT
                                      and not processed)
             if group.pixels > OPEN_LIMIT:
-                text += (f"\nMosaïque de {group.pixels / 1e6:.0f} Mpx : trop grande pour appliquer les "
-                         "ondelettes dans PlanStax (mémoire).")
+                text += "\n" + tr("Mosaïque de {mpx} Mpx : trop grande pour appliquer les ondelettes "
+                                  "dans PlanStax (mémoire).", mpx=f"{group.pixels / 1e6:.0f}")
                 if self.worker is not None and self.worker.suffix:
-                    text += (" Choisissez plutôt un traitement dans la liste « Traitement » : les "
-                             "ondelettes seront appliquées image par image.")
+                    text += " " + tr("Choisissez plutôt un traitement dans la liste « Traitement » : les "
+                                     "ondelettes seront appliquées image par image.")
         self.report.setPlainText(text)
         self.progress.setValue(1000)
-        self.progress.setFormat(f"Terminé en {result.seconds:.0f} s" if result.outputs else "Aucune mosaïque")
+        self.progress.setFormat(tr("Terminé en {seconds} s", seconds=f"{result.seconds:.0f}")
+                                if result.outputs else tr("Aucune mosaïque"))
 
     def _show_preview(self) -> None:
         if self.result is None or not self.result.outputs:
@@ -314,8 +315,8 @@ class MosaicDialog(QDialog):
         self._show_preview()
 
     def _on_failed(self, message: str) -> None:
-        self.progress.setFormat("Erreur")
-        QMessageBox.critical(self, self.windowTitle(), f"Assemblage impossible :\n{message}")
+        self.progress.setFormat(tr("Erreur"))
+        QMessageBox.critical(self, self.windowTitle(), tr("Assemblage impossible :\n{error}", error=message))
 
     def _on_finished(self) -> None:
         cancelled = self.worker is not None and self.worker.cancel_event.is_set()
@@ -327,13 +328,13 @@ class MosaicDialog(QDialog):
         self.start_btn.setEnabled(len(self._paths) >= 2)
         if cancelled:
             self.progress.setValue(0)
-            self.progress.setFormat("Assemblage annulé")
+            self.progress.setFormat(tr("Assemblage annulé"))
 
     def cancel(self) -> None:
         if self.worker is not None:
             self.worker.cancel_event.set()
             self.cancel_btn.setEnabled(False)
-            self.progress.setFormat("Annulation…")
+            self.progress.setFormat(tr("Annulation…"))
 
     def _open_result(self) -> None:
         if self.result and self.result.outputs and self._open_image is not None:
@@ -356,7 +357,7 @@ class MosaicDialog(QDialog):
     def _confirm_stop(self) -> bool:
         if self.worker is None or not self.worker.isRunning():
             return True
-        if QMessageBox.question(self, self.windowTitle(), "Un assemblage est en cours. L'interrompre ?") \
+        if QMessageBox.question(self, self.windowTitle(), tr("Un assemblage est en cours. L'interrompre ?")) \
                 != QMessageBox.StandardButton.Yes:
             return False
         self.worker.cancel_event.set()

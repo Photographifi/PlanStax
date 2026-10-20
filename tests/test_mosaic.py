@@ -116,6 +116,22 @@ def test_orientation_is_applied_to_the_placement(tmp_path, moon):
     assert diff.mean() < 1e-3 and diff.max() < 0.02
 
 
+def test_fine_rotation_is_applied_to_the_placement(tmp_path, moon):
+    from planstax.core.postprocess import rotate_fine
+    _, tiles, _ = moon
+    g = plan_mosaic(_write(tmp_path, tiles[:2])).groups[0]
+    render_mosaic(g, str(tmp_path / "droite.tif"))
+    turned = g.oriented(90, angle=-12.3)
+    render_mosaic(turned, str(tmp_path / "tournee.tif"))
+    expected = rotate_fine(np.rot90(read_image(str(tmp_path / "droite.tif")), -1), -12.3)
+    result = read_image(str(tmp_path / "tournee.tif"))
+    assert result.shape == expected.shape == (turned.height, turned.width)
+    inside = cv2.erode(((result > 0) & (expected > 0)).astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
+    assert inside.mean() > 0.4
+    diff = np.abs(result - expected)[inside]
+    assert diff.mean() < 3e-3 and np.percentile(diff, 99) < 0.03
+
+
 def test_bands_and_tiled_tiff_give_the_same_mosaic(tmp_path, moon, monkeypatch):
     _, tiles, _ = moon
     plan = plan_mosaic(_write(tmp_path, [tiles[k] for k in (0, 1, 3, 4)]))

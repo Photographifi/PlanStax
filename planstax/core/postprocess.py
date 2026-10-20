@@ -103,4 +103,30 @@ def orient(img: np.ndarray, p: PostSettings) -> np.ndarray:
         img = img[:, ::-1]
     if p.flip_v:
         img = img[::-1]
-    return np.ascontiguousarray(img)
+    img = np.ascontiguousarray(img)
+    if p.angle:
+        img = rotate_fine(img, p.angle)
+    return img
+
+
+def fine_rotation(width: int, height: int, angle: float) -> tuple[np.ndarray, int, int]:
+    """2×3 matrix turning a width × height image by `angle` degrees clockwise about its centre,
+    and the size of the enlarged frame that holds all of it."""
+    a = np.radians(angle)
+    c, s = abs(np.cos(a)), abs(np.sin(a))
+    new_w = int(np.ceil(width * c + height * s - 1e-6))
+    new_h = int(np.ceil(width * s + height * c - 1e-6))
+    m = cv2.getRotationMatrix2D(((width - 1) / 2.0, (height - 1) / 2.0), -angle, 1.0)  # OpenCV: + = anticlockwise
+    m[0, 2] += (new_w - width) / 2.0
+    m[1, 2] += (new_h - height) / 2.0
+    return m, new_w, new_h
+
+
+def rotate_fine(img: np.ndarray, angle: float) -> np.ndarray:
+    """The image turned by `angle` degrees clockwise, in a frame enlarged so that nothing is cut
+    off (the corners are black)."""
+    h, w = img.shape[:2]
+    m, new_w, new_h = fine_rotation(w, h, angle)
+    out = cv2.warpAffine(img.astype(np.float32, copy=False), m, (new_w, new_h), flags=cv2.INTER_CUBIC,
+                         borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    return np.clip(out, 0.0, 1.0)

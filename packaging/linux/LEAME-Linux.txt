@@ -1,0 +1,70 @@
+PlanStax {version} para Linux — apilado y ondículas para la imagen planetaria
+===============================================================================
+
+Primera versión para Linux: todavía no se ha probado en ningún Linux real. Le agradecemos que
+avise de cualquier problema, copiando lo que muestra el terminal.
+
+QUÉ SE NECESITA
+  Linux de 64 bits (PC x86_64 o ARM64), Python 3.10 o más reciente y una conexión a Internet
+  en el primer inicio (unos 150 MB de bibliotecas, que se descargan una sola vez).
+
+  Paquetes del sistema que instalar antes, según la distribución:
+    Ubuntu, Debian, Linux Mint:  sudo apt install python3 python3-venv libxcb-cursor0
+    Fedora:                      sudo dnf install python3 xcb-util-cursor
+    Arch, Manjaro:               sudo pacman -S python xcb-util-cursor
+    openSUSE:                    sudo zypper install python3 libxcb-cursor0
+
+INSTALACIÓN
+  1. Descomprima el archivo, por ejemplo en su carpeta personal:
+       unzip PlanStax-{version}-Linux.zip
+  2. Inicie PlanStax desde un terminal:
+       cd PlanStax
+       chmod +x planstax.sh       (si es necesario)
+       ./planstax.sh
+     El primer inicio instala las bibliotecas en la subcarpeta .venv y luego abre la
+     ventana. Las veces siguientes, la ventana se abre directamente.
+
+USO
+  ./planstax.sh                 abre la interfaz
+  ./planstax.sh video.ser       abre la interfaz con un vídeo (SER, AVI, MP4…)
+
+  En la interfaz:
+    1. Ctrl+O: abrir un vídeo (o arrastrarlo a la ventana).
+    2. F5 «Hacer todo»: alineación, selección de las mejores imágenes, apilado.
+    3. Pestaña Ondículas: subir el realce de las capas 1 a 3 (de 30 a 50 para empezar).
+    4. Pestaña Acabado: alineación RGB automática, balance de color, niveles,
+       orientación (cuartos de vuelta, espejos, rotación fina de ±90° por décimas de grado).
+    5. Ctrl+S: guardar (se aconseja TIFF de 16 bits).
+
+  Idioma: francés, inglés o español, según el del sistema. Para cambiarlo: menú Ver >
+  «Langue / Language / Idioma» y luego reinicie. En la línea de comandos:
+       ./planstax.sh --lang es batch
+
+  Varios vídeos de una vez: déjelos en la carpeta «input» (creada junto a planstax.sh) y luego
+  Archivo > Procesamiento por lotes (Ctrl+L) > Iniciar; se escribe una imagen por vídeo en
+  «output». En la línea de comandos:
+       ./planstax.sh batch                         (carpetas input → output)
+       ./planstax.sh batch ~/Capturas ~/Imagenes   (otras carpetas)
+
+  Mosaico (Luna, Sol, paisaje tomado en varios campos, con un 25 % de solapamiento
+  aproximadamente): marque «Montar las imágenes en un mosaico» en la ventana del
+  procesamiento por lotes, o Archivo > Montar un mosaico (Ctrl+M). En la línea de comandos:
+       ./planstax.sh batch --mosaic                (output/mosaique.tif al final del lote)
+       ./planstax.sh mosaic ~/Imagenes/Luna        (imágenes ya hechas)
+
+  Ajustes y preajustes: ~/.config/PlanStax
+
+EN CASO DE PROBLEMA
+  - «Could not load the Qt platform plugin "xcb"»: instale el paquete libxcb-cursor
+    indicado más arriba para su distribución.
+  - En Wayland, si la ventana no aparece, pruebe:
+       QT_QPA_PLATFORM=xcb ./planstax.sh
+  - Para reinstalarlo todo: borre la subcarpeta .venv y vuelva a ejecutar ./planstax.sh.
+  - Para usar otro Python:  PYTHON=python3.12 ./planstax.sh
+
+DESINSTALACIÓN
+  Borre la carpeta PlanStax y, si lo desea, ~/.config/PlanStax.
+
+ACERCA DE
+  PlanStax es software libre (licencia MIT, © 2026 Photographifi), escrito en Python con
+  NumPy, OpenCV, Qt (PySide6) y tifffile. No tiene ninguna relación con RegiStax ni con su autor.

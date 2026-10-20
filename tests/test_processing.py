@@ -209,6 +209,30 @@ def test_rgb_shift_estimation():
     assert abs(bx + 1.2) < 0.2 and abs(by - 0.6) < 0.2
 
 
+def test_fine_rotation_enlarges_the_frame_clockwise():
+    from planstax.core.postprocess import apply_post, rotate_fine
+    from planstax.settings import PostSettings
+    rng = np.random.default_rng(3)
+    img = rng.uniform(0.2, 1.0, (100, 200)).astype(np.float32)
+    assert apply_post(img, PostSettings(angle=0.0)) is img
+    # A quarter turn either way is exactly rot90, and the frame just swaps its sides.
+    assert np.allclose(rotate_fine(img, 90.0), np.rot90(img, -1), atol=1e-4)
+    assert np.allclose(rotate_fine(img, -90.0), np.rot90(img, 1), atol=1e-4)
+    # 30°: nothing is cut off, the corners are black, a point right of the centre goes down.
+    dot = np.zeros((101, 201), np.float32)
+    dot[48:53, 138:143] = 1.0  # 40 px right of the centre (100, 50)
+    out = apply_post(dot, PostSettings(angle=30.0))
+    h, w = out.shape
+    assert (w, h) == (int(np.ceil(201 * np.cos(np.pi / 6) + 101 * 0.5)), int(np.ceil(201 * 0.5 + 101 * np.cos(np.pi / 6))))
+    y, x = np.unravel_index(np.argmax(cv2.GaussianBlur(out, (0, 0), 1.5)), out.shape)
+    assert abs(x - ((w - 1) / 2 + 40 * np.cos(np.pi / 6))) < 1.0 and abs(y - ((h - 1) / 2 + 40 * 0.5)) < 1.0
+    turned = rotate_fine(np.ones((101, 201), np.float32), 30.0)
+    assert turned[0, 0] == turned[-1, -1] == 0.0 and turned[h // 2, w // 2] == pytest.approx(1.0, abs=1e-3)
+    assert abs(float(turned.sum()) - 101 * 201) < 0.01 * 101 * 201
+    # Colour images keep their channels.
+    assert rotate_fine(np.dstack([img] * 3), 12.5).shape[2] == 3
+
+
 def _register_rmse(img, truth):
     (dx, dy), _ = cv2.phaseCorrelate(truth.astype(np.float32), img.astype(np.float32))
     h, w = truth.shape[:2]

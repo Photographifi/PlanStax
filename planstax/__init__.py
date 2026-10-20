@@ -1,4 +1,4 @@
 """PlanStax : empilement « lucky imaging » et ondelettes pour l'imagerie planétaire."""
 
-__version__ = "0.4.0"
+__version__ = "1.0.0"
 APP_NAME = "PlanStax"

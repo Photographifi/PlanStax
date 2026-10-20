@@ -15,6 +15,7 @@ from typing import Callable
 
 import numpy as np
 
+from ..i18n import tr
 from ..io.sources import FrameSource, luminance
 from ..settings import Settings
 from .alignment import GlobalAligner, StabilityMap, sample_shifted
@@ -70,7 +71,7 @@ def map_frames(source: FrameSource, indices, fn, *, workers: int, progress: Prog
                 raise Cancelled()
             now = time.monotonic()
             if progress and (now - t_last > 0.1 or not pending):
-                progress(done_count / n, f"{label} : {done_count}/{n}")
+                progress(done_count / n, tr("{label} : {done}/{total}", label=label, done=done_count, total=n))
                 t_last = now
     return results
 
@@ -122,7 +123,7 @@ class Pipeline:
             return st.quality, st.centroid, st.brightness
 
         res = map_frames(self.source, range(len(self.source)), fn, workers=self.workers,
-                         progress=progress, cancel=cancel, label="Analyse de la qualité")
+                         progress=progress, cancel=cancel, label=tr("Analyse de la qualité"))
         quality = np.array([r[0] for r in res], dtype=np.float64)
         centroids = np.array([r[1] for r in res], dtype=np.float64)
         brightness = np.array([r[2] for r in res], dtype=np.float64)
@@ -159,7 +160,7 @@ class Pipeline:
             if stability is not None:
                 stability.add(aligned)
             if progress:
-                progress((k + 1) / count, f"Image de référence : {k + 1}/{count}")
+                progress((k + 1) / count, tr("Image de référence : {done}/{total}", done=k + 1, total=count))
         self.reference = (acc / count).astype(np.float32)
         self.reference_index = best
         self._aligner = GlobalAligner(self.reference, a.surface, tuple(a.centroids[best]),
@@ -196,7 +197,7 @@ class Pipeline:
             return dx, dy, resp, shifts, valid, quality
 
         res = map_frames(self.source, range(len(self.source)), fn, workers=self.workers,
-                         progress=progress, cancel=cancel, label="Alignement")
+                         progress=progress, cancel=cancel, label=tr("Alignement"))
         n_pts = len(self.points)
         self.alignment = Alignment(
             global_shifts=np.array([[r[0], r[1]] for r in res], dtype=np.float64),
@@ -271,7 +272,7 @@ class Pipeline:
                                     None if local_w is None else local_w[i])
 
         map_frames(self.source, sel, fn, workers=self.workers, progress=progress,
-                   cancel=cancel, label="Empilement")
+                   cancel=cancel, label=tr("Empilement"))
         # Cubic resampling can overshoot slightly past saturated pixels; clip rather than rescale.
         self.stacked = np.clip(stacker.result(), 0.0, 1.0)
         return self.stacked

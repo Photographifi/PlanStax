@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..i18n import tr
+
 BLOCK = 2880
 CARD = 80
 
@@ -33,7 +35,7 @@ def _parse_header(fh) -> dict:
     while True:
         block = fh.read(BLOCK)
         if len(block) < BLOCK:
-            raise ValueError("Fichier FITS tronqué")
+            raise ValueError(tr("Fichier FITS tronqué"))
         for i in range(0, BLOCK, CARD):
             card = block[i:i + CARD].decode("ascii", "replace")
             key = card[:8].strip()
@@ -70,7 +72,7 @@ def read_fits(path: str) -> tuple[np.ndarray, dict]:
         bitpix = int(header["BITPIX"])
         naxis = int(header.get("NAXIS", 0))
         if naxis not in (2, 3):
-            raise ValueError(f"Image FITS non prise en charge (NAXIS={naxis})")
+            raise ValueError(tr("Image FITS non prise en charge (NAXIS={naxis})", naxis=naxis))
         dims = [int(header[f"NAXIS{i}"]) for i in range(1, naxis + 1)]
         count = int(np.prod(dims))
         data = np.frombuffer(fh.read(count * abs(bitpix) // 8), dtype=_BITPIX_DTYPES[bitpix])

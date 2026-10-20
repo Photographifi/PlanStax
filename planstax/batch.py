@@ -17,12 +17,13 @@ from .core.mosaic import MosaicGroup, MosaicPlan, plan_mosaic, render_mosaic
 from .core.pipeline import Progress
 from .core.postprocess import apply_tone, has_tone
 from .io import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, open_source, save_image
+from .i18n import N_, tr
 from .io.images import quantize, to_float
 from .settings import Settings
 
-# (label, extension, bits)
-FORMATS = [("TIFF 16 bits", "tif", 16), ("PNG 16 bits", "png", 16),
-           ("FITS 32 bits flottant", "fits", 32), ("JPEG", "jpg", 8)]
+# (label — translated where it is shown, extension, bits)
+FORMATS = [(N_("TIFF 16 bits"), "tif", 16), (N_("PNG 16 bits"), "png", 16),
+           (N_("FITS 32 bits flottant"), "fits", 32), (N_("JPEG"), "jpg", 8)]
 
 
 @dataclass
@@ -178,8 +179,9 @@ class MosaicResult:
 
     def summary(self) -> str:
         if not self.outputs:
-            return "aucune mosaïque"
-        parts = [f"{os.path.basename(p)} ({len(g.paths)} images)" for p, g in zip(self.outputs, self.groups)]
+            return tr("aucune mosaïque")
+        parts = [tr("{name} ({n} images)", name=os.path.basename(p), n=len(g.paths))
+                 for p, g in zip(self.outputs, self.groups)]
         return ", ".join(parts)
 
 
@@ -210,7 +212,7 @@ def make_mosaics(paths: list[str], out_dir: str, fmt: str = "tif", bits: int = 1
 
         if settings is not None:
             p = settings.post
-            g = g.oriented(p.rotate, p.flip_h, p.flip_v)
+            g = g.oriented(p.rotate, p.flip_h, p.flip_v, p.angle)
         result.previews.append(render_mosaic(g, path, bits, part, cancel,
                                              prepare=prepare, finish=finish_band))
         result.outputs.append(path)

@@ -1,0 +1,67 @@
+PlanStax {version} para Mac — apilado y ondículas para la imagen planetaria
+=============================================================================
+
+Primera versión para Mac: todavía no se ha probado en ningún Mac real. Le agradecemos que
+avise de cualquier problema, copiando lo que muestra la ventana del Terminal.
+
+QUÉ SE NECESITA
+  macOS 12 (Monterey) o más reciente, Mac con Apple Silicon (M1, M2, M3, M4…) o Intel.
+  Python 3.13, que se instala una vez desde https://www.python.org/downloads/macos/
+  («macOS 64-bit universal2 installer»). El Python que trae macOS es demasiado antiguo.
+  Una conexión a Internet en el primer inicio (unos 150 MB de bibliotecas, que se descargan
+  una sola vez).
+
+INSTALACIÓN
+  1. Haga doble clic en el archivo .zip: aparece la carpeta PlanStax (en general en
+     Descargas). Guárdela donde quiera, por ejemplo en su carpeta personal.
+  2. Primer inicio, desde el Terminal (Aplicaciones > Utilidades > Terminal): escriba
+       bash
+     seguido de un espacio, arrastre el archivo PlanStax.command de la carpeta a la ventana
+     del Terminal y pulse Retorno.
+     El Terminal instala las bibliotecas (unos minutos) y luego se abre la ventana de PlanStax.
+  3. Las veces siguientes: basta con hacer doble clic en PlanStax.command.
+
+  ¿Por qué pasar por el Terminal la primera vez? macOS (Gatekeeper) se niega a abrir con un
+  doble clic un archivo descargado que no procede de un desarrollador registrado en Apple.
+  Tras este primer inicio, PlanStax levanta él mismo este bloqueo en su carpeta.
+  Otra posibilidad: haga doble clic en PlanStax.command, rechace, abra luego Ajustes del
+  Sistema > Privacidad y seguridad y haga clic en «Abrir igualmente».
+
+USO
+  1. ⌘O: abrir un vídeo SER, AVI, MP4… (o arrastrarlo a la ventana).
+  2. F5 «Hacer todo»: alineación, selección de las mejores imágenes, apilado.
+  3. Pestaña Ondículas: subir el realce de las capas 1 a 3 (de 30 a 50 para empezar).
+  4. Pestaña Acabado: alineación RGB automática, balance de color, niveles,
+     orientación (cuartos de vuelta, espejos, rotación fina de ±90° por décimas de grado).
+  5. ⌘S: guardar (se aconseja TIFF de 16 bits).
+  En la imagen de referencia: ⌘ + clic añade un punto de alineación, Mayús + clic lo quita.
+
+  Idioma: francés, inglés o español, según el de macOS. Para cambiarlo: menú Ver >
+  «Langue / Language / Idioma» y luego reinicie PlanStax.
+
+  Varios vídeos de una vez: déjelos en la carpeta «input» (creada junto a
+  PlanStax.command) y luego Archivo > Procesamiento por lotes (⌘L) > Iniciar; se escribe una
+  imagen por vídeo en «output».
+
+  Mosaico (Luna, Sol, paisaje tomado en varios campos, con un 25 % de solapamiento
+  aproximadamente): marque «Montar las imágenes en un mosaico» en la ventana del
+  procesamiento por lotes, o Archivo > Montar un mosaico (⇧⌘M).
+
+  La ventana del Terminal permanece abierta mientras PlanStax funciona: es normal, no la
+  cierre (podrá cerrarla después de salir de PlanStax).
+
+  Ajustes y preajustes: ~/Library/Application Support/PlanStax
+
+EN CASO DE PROBLEMA
+  - «No se encuentra Python 3.10 o más reciente»: instale Python 3.13 (véase más arriba) y
+    vuelva a iniciar.
+  - Para reinstalarlo todo: borre la subcarpeta oculta .venv (en el Terminal:
+    rm -rf ~/ruta/a/PlanStax/.venv) y vuelva a iniciar.
+
+DESINSTALACIÓN
+  Borre la carpeta PlanStax y, si lo desea,
+  ~/Library/Application Support/PlanStax.
+
+ACERCA DE
+  PlanStax es software libre (licencia MIT, © 2026 Photographifi), escrito en Python con
+  NumPy, OpenCV, Qt (PySide6) y tifffile. No tiene ninguna relación con RegiStax ni con su autor.

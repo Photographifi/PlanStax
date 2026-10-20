@@ -8,6 +8,8 @@ import cv2
 import numpy as np
 import tifffile
 
+from ..i18n import tr
+
 from .fits import read_fits, write_fits
 
 IMAGE_EXTENSIONS = (".tif", ".tiff", ".png", ".fit", ".fits", ".fts", ".jpg", ".jpeg", ".bmp")
@@ -23,7 +25,7 @@ def _decode_with_opencv(path: str) -> np.ndarray:
     buf = np.fromfile(path, dtype=np.uint8)
     data = cv2.imdecode(buf, cv2.IMREAD_UNCHANGED | cv2.IMREAD_ANYDEPTH)
     if data is None:
-        raise ValueError(f"Impossible de lire l'image : {path}")
+        raise ValueError(tr("Impossible de lire l'image : {path}", path=path))
     if data.ndim == 3:
         data = cv2.cvtColor(data, cv2.COLOR_BGRA2RGB if data.shape[2] == 4 else cv2.COLOR_BGR2RGB)
     return data
@@ -110,7 +112,7 @@ def write_samples(path: str, data: np.ndarray) -> None:
     params = [cv2.IMWRITE_JPEG_QUALITY, 95] if ext in (".jpg", ".jpeg") else []
     ok, buf = cv2.imencode(ext or ".png", data, params)
     if not ok:
-        raise ValueError(f"Format d'image non pris en charge : {ext}")
+        raise ValueError(tr("Format d'image non pris en charge : {ext}", ext=ext))
     buf.tofile(path)
 
 

@@ -5,9 +5,16 @@ lunaire et solaire, et pour les prises de vue terrestres à travers la turbulenc
 moderne pour Windows 10/11 (64 bits), qui reprend le déroulement de travail de RegiStax 6 :
 **alignement → sélection → empilement → ondelettes → finitions**.
 
+Interface en **français, anglais et espagnol**.
+
 *English: PlanStax is a free lucky-imaging stacker with 6-layer wavelet sharpening for planetary,
 lunar, solar and terrestrial videos (SER, AVI), following the RegiStax 6 workflow. Interface in
-French. Windows 10/11, 64-bit.*
+French, English and Spanish. Windows 10/11, 64-bit. [Summary in English](#english-summary).*
+
+*Español: PlanStax es un programa libre de apilado «lucky imaging» con ondículas de 6 capas para
+vídeos planetarios, lunares, solares y terrestres (SER, AVI), siguiendo el flujo de trabajo de
+RegiStax 6. Interfaz en francés, inglés y español. Windows 10/11, 64 bits.
+[Resumen en español](#resumen-en-español).*
 
 ![Fenêtre principale de PlanStax](docs/images/fenetre-principale.png)
 
@@ -18,11 +25,13 @@ RegiStax et n'a aucun lien avec RegiStax ni avec son auteur.
 
 - Alignement global et multipoints, sélection des meilleures images (globale et locale), empilement, agrandissement 1,5×–3×.
 - Ondelettes à 6 couches (gain et débruitage par couche), alignement RVB, balance des couleurs, niveaux.
+- Orientation : quarts de tour, miroirs et rotation fine de ±90° au dixième de degré.
 - Traitement par lot : toutes les vidéos d'un dossier « input » → une image par vidéo dans « output ».
 - Mosaïques : les images qui se recouvrent (Lune, Soleil, paysage pris en plusieurs champs) sont
   assemblées automatiquement en une seule, même de plusieurs centaines de mégapixels.
 - Import des réglages RegiStax 6 (points d'alignement, sélection).
 - Formats : SER, AVI, MP4, FITS, TIFF, PNG ; sortie TIFF/PNG 16 bits, FITS, JPEG.
+- Interface et modes d'emploi en français, anglais et espagnol.
 
 ## Installation
 
@@ -35,6 +44,9 @@ Sur la page **Releases** du projet :
 | **PlanStax-&lt;version&gt;-Windows.zip** | **Windows 10/11.** Décompressez (clic droit → « Extraire tout… »), puis double-cliquez sur `PlanStax.exe`. Rien à installer. |
 | **PlanStax-&lt;version&gt;-Mac.zip** | **macOS 12 ou plus récent** (Apple Silicon ou Intel), avec Python 3.13 de python.org. Voir `LISEZ-MOI-Mac.txt` dans l'archive : `PlanStax.command` installe tout au premier lancement. |
 | **PlanStax-&lt;version&gt;-Linux.zip** | **Linux 64 bits.** Voir `LISEZ-MOI-Linux.txt` dans l'archive : `./planstax.sh` installe tout au premier lancement. |
+
+Chaque archive contient son mode d'emploi en français (`LISEZ-MOI`), en anglais (`README`) et en
+espagnol (`LEAME`).
 
 ### Windows (sans Python)
 
@@ -82,10 +94,20 @@ py -3.12 -m venv .venv
    couche : un même réglage donne un effet comparable de la couche 1 à la couche 6. Le gain
    réellement appliqué est affiché à côté (×33,3…), et c'est lui qu'enregistrent les préréglages.
 4. Onglet **Finitions** : alignement RVB automatique, balance des couleurs, niveaux, orientation.
+   La **rotation fine** (±90° au dixième de degré, positif dans le sens horaire) redresse l'image
+   finale. L'image est agrandie pour que rien ne soit coupé, et les coins restent noirs.
 5. **Ctrl+S** : enregistrer, de préférence en TIFF 16 bits.
 
 Raccourcis : **B** avant/après · **F** ajuster à la fenêtre · **1** 100 % · **P** afficher les points.
 Sur l'image de référence, **Ctrl + clic** ajoute un point d'alignement et **Maj + clic** le retire.
+
+## Langue
+
+PlanStax s'affiche en français, en anglais ou en espagnol, selon la langue du système (anglais
+pour les autres langues). Pour en changer : menu *Affichage → Langue / Language / Idioma*, puis
+redémarrez PlanStax. En ligne de commande : `--lang fr|en|es`, par exemple
+`python -m planstax --lang en batch`. La variable d'environnement `PLANSTAX_LANG` a le même
+effet.
 
 ## Plusieurs vidéos d'un coup (traitement par lot)
 
@@ -142,6 +164,10 @@ bruts déjà enregistrés : ondelettes et finitions des réglages actuels ou d'u
 peut ainsi régler une image à la main, puis refaire toute la mosaïque sans réempiler les
 vidéos.
 
+L'orientation des finitions (quarts de tour, miroirs, rotation fine) s'applique aussi à la
+mosaïque. Les images sont alors placées directement dans le cadre tourné, sans second
+rééchantillonnage.
+
 Conseils :
 - prévoyez environ **25 % de recouvrement** entre champs voisins ;
 - traitez toutes les vidéos avec les mêmes réglages : c'est le cas dans un même lot.
@@ -183,6 +209,7 @@ résultat juste. Ils restent au neutre, et les positions d'origine sont affiché
 .venv\Scripts\python.exe -m planstax presets --import-registax "C:\Program Files (x86)\RegiStax 6"
 .venv\Scripts\python.exe -m planstax demo essai.ser --color
 .venv\Scripts\python.exe -m planstax demo champs-lune --mosaic   # 9 champs pour essayer la mosaïque
+.venv\Scripts\python.exe -m planstax --lang en batch             # messages en anglais
 ```
 
 Dans la version portable : `PlanStax.exe cli batch …` (sans console : seul le code de retour
@@ -207,7 +234,7 @@ ondelettes et finitions d'un préréglage, comme le traitement par lot.
 `~/.config/PlanStax` sous Linux :
 - `presets\*.json` : les préréglages, lisibles et modifiables ;
 - `last.json` : les derniers réglages, restaurés au démarrage ;
-- `interface.ini` : la taille de la fenêtre, les derniers dossiers et le thème.
+- `interface.ini` : la taille de la fenêtre, les derniers dossiers, le thème et la langue.
 
 Rien n'est écrit dans `Program Files` ni dans le registre.
 
@@ -269,7 +296,7 @@ bibliothèque DLL trouve ses dépendances, Visual C++ compris, pour fonctionner 
 ## Développement
 
 ```powershell
-.venv\Scripts\python.exe -m pytest        # 63 tests : formats, alignement, empilement, mosaïques, lot, interface, archives
+.venv\Scripts\python.exe -m pytest        # 75 tests : formats, alignement, empilement, mosaïques, lot, interface, langues, archives
 ```
 
 Organisation du code :
@@ -278,6 +305,9 @@ Organisation du code :
 - `planstax\gui` : l'interface Qt ;
 - `planstax\batch.py`, `planstax\cli.py` : traitement par lot et ligne de commande ;
 - `planstax\synth.py` : génération de vidéos et de champs lunaires artificiels pour les tests ;
+- `planstax\i18n.py`, `planstax\locales\catalog.py` : les langues. Les textes sont écrits en
+  français dans le code, entourés de `tr()`, et le catalogue donne leur traduction anglaise et
+  espagnole. `packaging\extract_texts.py --missing` liste ceux qui ne sont pas encore traduits ;
 - `packaging\` : fabrication et test de la version portable.
 
 ## Limites connues
@@ -286,6 +316,45 @@ Organisation du code :
 - Pas encore de « deringing » (atténuation des halos sur le limbe) ni de drizzle au sens strict :
   l'agrandissement est un rééchantillonnage pendant l'empilement.
 - Les gains d'ondelettes de RegiStax ne sont pas transposables (voir plus haut).
+
+## English summary
+
+PlanStax stacks planetary, lunar, solar and terrestrial videos (SER, AVI, MP4) the "lucky imaging"
+way and sharpens the result with 6-layer wavelets, following the RegiStax 6 workflow. It is
+written from scratch and has no link with RegiStax nor its author.
+
+- **Windows 10/11**: download `PlanStax-<version>-Windows.zip` from the **Releases** page,
+  right-click → "Extract All…", then double-click `PlanStax.exe`. Nothing to install.
+- **Mac and Linux** (experimental): see `README-Mac.txt` or `README-Linux.txt` in the archive;
+  the launcher script installs the libraries on the first start.
+- **Use**: Ctrl+O open a video · F5 "Do all" (alignment, selection, stacking) · Wavelets tab
+  (sharpening 30 to 50 on layers 1 to 3 to begin with) · Finishing tab (RGB alignment, colour
+  balance, levels, orientation with a fine rotation of ±90° by tenths of a degree) · Ctrl+S save.
+- **Batch processing** (Ctrl+L): every video of the `input` folder gives one image in `output`.
+  **Mosaics** (Ctrl+M, or a tick box in the batch): overlapping fields are assembled
+  automatically, with brightness and colours evened out.
+- **Language**: following the system; View menu → "Langue / Language / Idioma", or
+  `--lang en` on the command line.
+
+## Resumen en español
+
+PlanStax apila vídeos planetarios, lunares, solares y terrestres (SER, AVI, MP4) con la técnica
+«lucky imaging» y realza el resultado con ondículas de 6 capas, siguiendo el flujo de trabajo
+de RegiStax 6. Está escrito desde cero y no tiene ninguna relación con RegiStax ni con su autor.
+
+- **Windows 10/11**: descargue `PlanStax-<version>-Windows.zip` desde la página **Releases**,
+  clic derecho → «Extraer todo…» y doble clic en `PlanStax.exe`. No hay nada que instalar.
+- **Mac y Linux** (experimental): véase `LEAME-Mac.txt` o `LEAME-Linux.txt` en el archivo;
+  el script de inicio instala las bibliotecas la primera vez.
+- **Uso**: Ctrl+O abrir un vídeo · F5 «Hacer todo» (alineación, selección, apilado) · pestaña
+  Ondículas (realce de 30 a 50 en las capas 1 a 3 para empezar) · pestaña Acabado (alineación
+  RGB, balance de color, niveles, orientación con rotación fina de ±90° por décimas de grado)
+  · Ctrl+S guardar.
+- **Procesamiento por lotes** (Ctrl+L): cada vídeo de la carpeta `input` da una imagen en
+  `output`. **Mosaicos** (Ctrl+M, o una casilla en el lote): los campos que se solapan se montan
+  automáticamente, con el brillo y los colores igualados.
+- **Idioma**: según el del sistema; menú Ver → «Langue / Language / Idioma», o `--lang es` en
+  la línea de comandos.
 
 ## Licence
 

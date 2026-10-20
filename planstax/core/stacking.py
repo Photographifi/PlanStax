@@ -15,6 +15,7 @@ import threading
 import cv2
 import numpy as np
 
+from ..i18n import tr
 from .alignment import sample_shifted
 
 
@@ -89,7 +90,7 @@ class Stacker:
 
     def result(self) -> np.ndarray:
         if not self._accums:
-            raise RuntimeError("Aucune image n'a été empilée")
+            raise RuntimeError(tr("Aucune image n'a été empilée"))
         bg = np.zeros(self.out_shape, dtype=np.float64)
         bg_w = 0.0
         patches = np.zeros(self._accums[0].patches.shape, dtype=np.float64)

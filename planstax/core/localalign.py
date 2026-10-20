@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from ..i18n import tr
 from ..settings import AlignSettings
 from .quality import log_energy, smooth
 
@@ -35,31 +36,32 @@ class PlacementReport:
 
     def explain(self, s: AlignSettings) -> str:
         if self.frame_too_small:
-            return ("Aucun point : l'image est trop petite pour la taille des boîtes, le rayon de "
-                    "recherche et la marge au bord choisis.")
-        lines = [f"{self.placed} point(s) d'alignement."]
+            return tr("Aucun point : l'image est trop petite pour la taille des boîtes, le rayon de "
+                      "recherche et la marge au bord choisis.")
+        lines = [tr("{n} point(s) d'alignement.", n=self.placed)]
         dropped = []
         if self.too_bright:
-            dropped.append(f"{self.too_bright} zones plus claires que {s.max_brightness}")
+            dropped.append(tr("{n} zones plus claires que {limit}", n=self.too_bright, limit=s.max_brightness))
         if self.too_dark:
-            dropped.append(f"{self.too_dark} zones plus sombres que {s.min_brightness}")
+            dropped.append(tr("{n} zones plus sombres que {limit}", n=self.too_dark, limit=s.min_brightness))
         if self.low_detail:
-            dropped.append(f"{self.low_detail} zones sans assez de détail")
+            dropped.append(tr("{n} zones sans assez de détail", n=self.low_detail))
         if self.over_limit:
-            dropped.append(f"{self.over_limit} au-delà du maximum de {s.max_points}")
+            dropped.append(tr("{n} au-delà du maximum de {limit}", n=self.over_limit, limit=s.max_points))
         if dropped:
-            lines.append("Écartées : " + ", ".join(dropped) + ".")
+            lines.append(tr("Écartées : {list}.", list=", ".join(dropped)))
         if self.brightness:
             lo, med, hi = self.brightness
-            lines.append(f"Luminosité des zones : {lo:.0f} à {hi:.0f} sur 255 (médiane {med:.0f}).")
+            lines.append(tr("Luminosité des zones : {lo} à {hi} sur 255 (médiane {median}).",
+                            lo=f"{lo:.0f}", hi=f"{hi:.0f}", median=f"{med:.0f}"))
         if self.placed == 0 and self.brightness:
             lo, _, hi = self.brightness
             if self.too_bright >= max(self.too_dark, self.low_detail):
-                lines.append(f"→ Montez « Luminosité max. » au-dessus de {hi:.0f}.")
+                lines.append(tr("→ Montez « Luminosité max. » au-dessus de {value}.", value=f"{hi:.0f}"))
             elif self.too_dark >= self.low_detail:
-                lines.append(f"→ Descendez « Luminosité min. » sous {lo:.0f}.")
+                lines.append(tr("→ Descendez « Luminosité min. » sous {value}.", value=f"{lo:.0f}"))
             else:
-                lines.append("→ Baissez « Détail minimal ».")
+                lines.append(tr("→ Baissez « Détail minimal »."))
         return "\n".join(lines)
 
 

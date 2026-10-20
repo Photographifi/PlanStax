@@ -8,6 +8,7 @@ def test_settings_dict_roundtrip():
     s.align.ap_spacing = 42
     s.wavelet.layers[2].gain = 7.5
     s.post.shift_r = (0.5, -1.0)
+    s.post.angle = -3.7
     back = Settings.from_dict(s.to_dict())
     assert back == s
 
@@ -16,6 +17,9 @@ def test_from_dict_tolerates_unknown_and_missing():
     s = Settings.from_dict({"align": {"ap_spacing": "25", "bogus": 1}, "unknown": {}})
     assert s.align.ap_spacing == 25
     assert s.limit.percent == Settings().limit.percent
+    # A preset of an earlier version, without the fine rotation.
+    old = Settings.from_dict({"post": {"rotate": 90, "flip_h": True}})
+    assert old.post.rotate == 90 and old.post.angle == 0.0
 
 
 def test_presets_saved_in_appdata(tmp_path, monkeypatch):

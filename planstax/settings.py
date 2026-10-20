@@ -83,6 +83,7 @@ class PostSettings:
     rotate: int = 0               # 0, 90, 180, 270 (clockwise)
     flip_h: bool = False
     flip_v: bool = False
+    angle: float = 0.0            # fine rotation, degrees clockwise (−90…90), applied last
 
     def is_neutral(self) -> bool:
         return self == PostSettings()

@@ -7,9 +7,27 @@ set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 venv="$here/.venv"
 
+lang="${PLANSTAX_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}}"
+if [ -z "$lang" ]; then  # started from the Finder without the Terminal's locale variables
+    lang="$(defaults read -g AppleLanguages 2>/dev/null | tr -d ' "()\n,' | cut -c1-2)"
+fi
+case "$lang" in
+    fr*) lang=fr ;;
+    es*) lang=es ;;
+    *) lang=en ;;
+esac
+
+say() {  # say "français" "English" "español"
+    case "$lang" in
+        fr) printf '%s\n' "$1" ;;
+        es) printf '%s\n' "$3" ;;
+        *) printf '%s\n' "$2" ;;
+    esac
+}
+
 fail() {
-    echo "PlanStax : $1" >&2
-    echo "Voir LISEZ-MOI-Mac.txt." >&2
+    echo "PlanStax: $(say "$1" "$2" "$3")" >&2
+    say "Voir LISEZ-MOI-Mac.txt." "See README-Mac.txt." "Véase LEAME-Mac.txt." >&2
     exit 1
 }
 
@@ -37,15 +55,24 @@ find_python() {
 }
 
 if [ ! -x "$venv/bin/python" ] || [ ! -f "$venv/.planstax-ok" ]; then
-    python="$(find_python)" || fail "Python 3.10 ou plus récent est introuvable : installez Python 3.13 depuis https://www.python.org/downloads/macos/"
-    echo "Premier lancement : installation des bibliothèques avec $("$python" --version) (environ 150 Mo, une seule fois)…"
+    python="$(find_python)" \
+        || fail "Python 3.10 ou plus récent est introuvable : installez Python 3.13 depuis https://www.python.org/downloads/macos/" \
+                "Python 3.10 or newer cannot be found: install Python 3.13 from https://www.python.org/downloads/macos/" \
+                "No se encuentra Python 3.10 o más reciente: instale Python 3.13 desde https://www.python.org/downloads/macos/"
+    version="$("$python" --version)"
+    say "Premier lancement : installation des bibliothèques avec $version (environ 150 Mo, une seule fois)…" \
+        "First start: installing the libraries with $version (about 150 MB, only once)…" \
+        "Primer inicio: instalación de las bibliotecas con $version (unos 150 MB, una sola vez)…"
     rm -rf "$venv"
-    "$python" -m venv "$venv" || fail "impossible de créer l'environnement Python."
+    "$python" -m venv "$venv" || fail "impossible de créer l'environnement Python." \
+        "cannot create the Python environment." "no se puede crear el entorno de Python."
     "$venv/bin/python" -m pip install --upgrade --quiet pip \
         && "$venv/bin/python" -m pip install --quiet -r "$here/requirements.txt" \
-        || { rm -rf "$venv"; fail "l'installation des bibliothèques a échoué (connexion Internet ?)."; }
+        || { rm -rf "$venv"; fail "l'installation des bibliothèques a échoué (connexion Internet ?)." \
+                                  "the installation of the libraries failed (Internet connection?)." \
+                                  "la instalación de las bibliotecas ha fallado (¿conexión a Internet?)."; }
     touch "$venv/.planstax-ok"
-    echo "Installation terminée."
+    say "Installation terminée." "Installation done." "Instalación terminada."
 fi
 
 export PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}"

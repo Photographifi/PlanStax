@@ -10,6 +10,7 @@ from PySide6.QtGui import QBrush, QColor, QIcon, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QApplication
 
 from .. import APP_NAME, __version__
+from ..i18n import set_language
 
 
 def make_icon_pixmap(size: int = 256) -> QPixmap:
@@ -59,9 +60,12 @@ def main(argv: list[str] | None = None) -> int:
     app.setOrganizationName(APP_NAME)
     app.setApplicationVersion(__version__)
     app.setWindowIcon(QIcon(make_icon_pixmap()))
-    # Qt's own texts (OK / Annuler in dialogs) in the system language.
+    code = set_language()
+    # Numbers in the input fields written as the language does (0,5 or 0.5), like the other texts.
+    QLocale.setDefault(QLocale(code))
+    # Qt's own texts (OK / Cancel in dialogs, file dialogs) in the same language.
     translator = QTranslator(app)
-    if translator.load(QLocale.system(), "qtbase", "_",
+    if translator.load(QLocale(code), "qtbase", "_",
                        QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)):
         app.installTranslator(translator)
 

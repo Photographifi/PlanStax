@@ -34,6 +34,7 @@ import cv2
 import numpy as np
 import tifffile
 
+from ..i18n import number, tr
 from ..io.images import output_bits, quantize, read_raw, to_float, write_samples
 from ..io.fits import write_fits
 from .pipeline import Cancelled, Progress
@@ -535,9 +536,12 @@ class MosaicGroup:
         """Corners of image k in the mosaic (4×2)."""
         return _apply(self.matrices[k], _outline(self.rects[k]))
 
-    def oriented(self, rotate: int = 0, flip_h: bool = False, flip_v: bool = False) -> "MosaicGroup":
+    def oriented(self, rotate: int = 0, flip_h: bool = False, flip_v: bool = False,
+                 angle: float = 0.0) -> "MosaicGroup":
         """The same mosaic turned as the finishing orientation does (quarter turns clockwise,
-        then mirrors), by placing the images directly in the turned frame."""
+        mirrors, then the fine rotation in an enlarged frame), by placing the images directly
+        in the turned frame: no second resampling."""
+        from .postprocess import fine_rotation
         W, H = self.width, self.height
         o = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
         for _ in range((rotate // 90) % 4):
@@ -547,6 +551,9 @@ class MosaicGroup:
             o = _compose(np.array([[-1.0, 0.0, W - 1.0], [0.0, 1.0, 0.0]]), o)
         if flip_v:
             o = _compose(np.array([[1.0, 0.0, 0.0], [0.0, -1.0, H - 1.0]]), o)
+        if angle:
+            turn, W, H = fine_rotation(W, H, angle)
+            o = _compose(turn, o)
         return dataclasses.replace(self, matrices=[_compose(o, m) for m in self.matrices],
                                    width=W, height=H)
 
@@ -565,49 +572,46 @@ class MosaicPlan:
     seconds: float = 0.0
 
     def state(self, k: int) -> str:
-        """Short French description of what became of image k."""
+        """Short description of what became of image k."""
         for n, g in enumerate(self.groups):
             if k in g.indices:
-                return f"Mosaïque {n + 1}" if len(self.groups) > 1 else "Placée"
+                return tr("Mosaïque {n}", n=n + 1) if len(self.groups) > 1 else tr("Placée")
         for dropped, kept in self.duplicates:
             if dropped == k:
-                return f"Même champ que {os.path.basename(self.paths[kept])}"
+                return tr("Même champ que {name}", name=os.path.basename(self.paths[kept]))
         for i, reason in self.excluded:
             if i == k:
                 return reason[:1].upper() + reason[1:]
         if k in self.isolated:
-            return "Aucun recouvrement trouvé"
+            return tr("Aucun recouvrement trouvé")
         return ""
 
     def explain(self) -> str:
         names = lambda ks: ", ".join(os.path.basename(self.paths[k]) for k in ks)  # noqa: E731
         lines = []
         if len(self.paths) < 2:
-            return "Il faut au moins deux images pour une mosaïque."
+            return tr("Il faut au moins deux images pour une mosaïque.")
         if not self.groups:
-            lines.append("Aucune mosaïque : aucune image ne recouvre une autre.")
+            lines.append(tr("Aucune mosaïque : aucune image ne recouvre une autre."))
         for n, g in enumerate(self.groups):
-            title = f"Mosaïque {n + 1}" if len(self.groups) > 1 else "Mosaïque"
+            title = tr("Mosaïque {n}", n=n + 1) if len(self.groups) > 1 else tr("Mosaïque")
             spread = max(float(np.abs(gain - 1.0).max()) for gain in g.gains) * 100
-            lines.append(f"{title} : {len(g.paths)} images, {g.width} × {g.height} px, "
-                         f"écart moyen aux raccords {_fr(g.rms, 2)} px, "
-                         f"luminosité et couleurs égalisées (corrections jusqu'à {_fr(spread, 0)} %).")
+            lines.append(tr("{title} : {n} images, {width} × {height} px, écart moyen aux raccords {rms} px, "
+                            "luminosité et couleurs égalisées (corrections jusqu'à {spread} %).",
+                            title=title, n=len(g.paths), width=g.width, height=g.height,
+                            rms=number(g.rms, 2), spread=number(spread, 0)))
         if self.isolated:
-            lines.append(f"Laissées de côté, sans recouvrement trouvé : {names(self.isolated)}. "
-                         "Il faut environ 25 % de recouvrement entre voisines et assez de détails "
-                         "(un ciel uni ou une mer lisse ne suffisent pas).")
+            lines.append(tr("Laissées de côté, sans recouvrement trouvé : {names}. "
+                            "Il faut environ 25 % de recouvrement entre voisines et assez de détails "
+                            "(un ciel uni ou une mer lisse ne suffisent pas).", names=names(self.isolated)))
         if self.duplicates:
-            lines.append("Laissées de côté car elles montrent le même champ qu'une autre : "
-                         + ", ".join(f"{os.path.basename(self.paths[d])} "
-                                     f"(comme {os.path.basename(self.paths[k])})"
-                                     for d, k in self.duplicates) + ".")
+            lines.append(tr("Laissées de côté car elles montrent le même champ qu'une autre : {list}.",
+                            list=", ".join(tr("{name} (comme {other})", name=os.path.basename(self.paths[d]),
+                                              other=os.path.basename(self.paths[k]))
+                                           for d, k in self.duplicates)))
         for k, reason in self.excluded:
-            lines.append(f"{os.path.basename(self.paths[k])} : {reason}.")
+            lines.append(tr("{name} : {reason}.", name=os.path.basename(self.paths[k]), reason=reason))
         return "\n".join(lines)
-
-
-def _fr(value: float, digits: int) -> str:
-    return f"{value:.{digits}f}".replace(".", ",")
 
 
 # ---------------------------------------------------------------------------------- planning
@@ -637,19 +641,20 @@ def plan_mosaic(paths: list[str], progress: Progress | None = None,
                     f.cancel()
                 raise
             except MemoryError:
-                plan.excluded.append((k, "mémoire insuffisante pour la lire"))
+                plan.excluded.append((k, tr("mémoire insuffisante pour la lire")))
             except Exception as exc:  # noqa: BLE001 - one unreadable image must not stop the rest
-                plan.excluded.append((k, f"illisible ({exc})"))
-            report(0.6 * (k + 1) / len(paths), f"Recherche des détails : image {k + 1}/{len(paths)}")
+                plan.excluded.append((k, tr("illisible ({error})", error=exc)))
+            report(0.6 * (k + 1) / len(paths), tr("Recherche des détails : image {done}/{total}",
+                                                  done=k + 1, total=len(paths)))
     for k in sorted(tiles):
         if _area(tiles[k].rect) == 0:
-            plan.excluded.append((k, "image vide"))
+            plan.excluded.append((k, tr("image vide")))
             del tiles[k]
     if tiles:
         median = float(np.median([tiles[k].width * tiles[k].height for k in tiles]))
         for k in sorted(tiles):
             if tiles[k].width * tiles[k].height > 4 * median and len(tiles) > 2:
-                plan.excluded.append((k, "bien plus grande que les autres (déjà une mosaïque ?)"))
+                plan.excluded.append((k, tr("bien plus grande que les autres (déjà une mosaïque ?)")))
                 del tiles[k]
     plan.excluded.sort()
 
@@ -664,7 +669,7 @@ def plan_mosaic(paths: list[str], progress: Progress | None = None,
                 pairs.append(result)
             if n % 16 == 0 or n == len(candidates) - 1:
                 report(0.6 + 0.35 * (n + 1) / len(candidates),
-                       f"Recherche des recouvrements : {len(pairs)} trouvés")
+                       tr("Recherche des recouvrements : {n} trouvés", n=len(pairs)))
 
     # The same field twice (an image and its copy, the same video processed twice…).
     dropped: dict[int, int] = {}
@@ -680,7 +685,7 @@ def plan_mosaic(paths: list[str], progress: Progress | None = None,
 
     # Global placement; a pair that disagrees with the others (a repeated pattern matched at
     # the wrong place) is dropped and the placement solved again.
-    report(0.96, "Placement des images")
+    report(0.96, tr("Placement des images"))
     while True:
         check()
         groups = [g for g in _components(nodes, pairs) if len(g) > 1]
@@ -711,7 +716,8 @@ def plan_mosaic(paths: list[str], progress: Progress | None = None,
         width, height = int(x1 - x0) + 1, int(y1 - y0) + 1
         if width > MAX_SIDE or height > MAX_SIDE or width * height > MAX_PIXELS:
             for k in g:
-                plan.excluded.append((k, f"placement incohérent (mosaïque de {width} × {height} px)"))
+                plan.excluded.append((k, tr("placement incohérent (mosaïque de {width} × {height} px)",
+                                            width=width, height=height)))
             continue
         shift = np.array([[0.0, 0.0, -x0], [0.0, 0.0, -y0]])
         n_points = sum(len(p.pts_i) for p in gp)
@@ -725,7 +731,7 @@ def plan_mosaic(paths: list[str], progress: Progress | None = None,
     plan.excluded.sort()
     plan.isolated = [k for k in nodes if k not in placed and all(k != e for e, _ in plan.excluded)]
     plan.seconds = time.time() - t0
-    report(1.0, "Placement terminé")
+    report(1.0, tr("Placement terminé"))
     return plan
 
 
@@ -892,7 +898,7 @@ def _bands(group: MosaicGroup, progress: Progress, cancel: threading.Event | Non
             acc_low += acc_high
             np.clip(acc_low, 0.0, 1.0, out=acc_low)
             del acc_high, w_low, w_high
-            progress(by1 / H, f"Assemblage : {by1 * 100 // H} %")
+            progress(by1 / H, tr("Assemblage : {percent} %", percent=by1 * 100 // H))
             yield by0, acc_low if C > 1 else acc_low[..., 0]
 
 

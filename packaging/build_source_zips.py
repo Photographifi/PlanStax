@@ -20,10 +20,10 @@ TOP = "PlanStax"
 FILES = ["LICENSE", "README.md", "pyproject.toml", "requirements.txt"]
 EXECUTABLE = 0o100755 << 16   # rwxr-xr-x, honoured by unzip and the macOS Archive Utility
 REGULAR = 0o100644 << 16
-# target → (folder in packaging/, launcher script, read-me)
+# target → (folder in packaging/, launcher script, read-me in French, English and Spanish)
 TARGETS = {
-    "Linux": ("linux", "planstax.sh", "LISEZ-MOI-Linux.txt"),
-    "Mac": ("macos", "PlanStax.command", "LISEZ-MOI-Mac.txt"),
+    "Linux": ("linux", "planstax.sh", ["LISEZ-MOI-Linux.txt", "README-Linux.txt", "LEAME-Linux.txt"]),
+    "Mac": ("macos", "PlanStax.command", ["LISEZ-MOI-Mac.txt", "README-Mac.txt", "LEAME-Mac.txt"]),
 }
 
 
@@ -42,7 +42,7 @@ def _add(zf: zipfile.ZipFile, arcname: str, data: bytes, mode: int = REGULAR) ->
 
 
 def build(out_dir: str, target: str) -> str:
-    folder, launcher, readme = TARGETS[target]
+    folder, launcher, readmes = TARGETS[target]
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, f"PlanStax-{__version__}-{target}.zip")
     count = 0
@@ -65,9 +65,10 @@ def build(out_dir: str, target: str) -> str:
                 count += 1
         with open(os.path.join(HERE, folder, launcher), "rb") as fh:
             _add(zf, launcher, _lf(fh.read()), EXECUTABLE)
-        with open(os.path.join(HERE, folder, readme), encoding="utf-8") as fh:
-            _add(zf, readme, fh.read().replace("{version}", __version__).encode("utf-8"))
-        count += 2
+        for readme in readmes:
+            with open(os.path.join(HERE, folder, readme), encoding="utf-8") as fh:
+                _add(zf, readme, fh.read().replace("{version}", __version__).encode("utf-8"))
+        count += 1 + len(readmes)
     print(f"archive : {path} ({count} fichiers, {os.path.getsize(path) / 1024:.0f} Ko)")
     return path
 

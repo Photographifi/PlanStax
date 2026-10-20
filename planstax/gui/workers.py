@@ -8,6 +8,7 @@ import traceback
 from PySide6.QtCore import QThread, Signal
 
 from ..core import Cancelled
+from ..i18n import tr
 
 
 class Task(QThread):
@@ -32,8 +33,8 @@ class Task(QThread):
         except Cancelled:
             self.cancelled.emit()
         except MemoryError:
-            self.failed.emit("Mémoire insuffisante pour ce traitement.\n"
-                             "Essayez un agrandissement plus faible ou moins de points d'alignement.")
+            self.failed.emit(tr("Mémoire insuffisante pour ce traitement.\n"
+                                "Essayez un agrandissement plus faible ou moins de points d'alignement."))
         except Exception as exc:  # noqa: BLE001 - reported to the user
             traceback.print_exc()
             self.failed.emit(f"{type(exc).__name__} : {exc}")

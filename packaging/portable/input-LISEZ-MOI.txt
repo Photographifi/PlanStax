@@ -1,7 +1,20 @@
+FRANÇAIS
 Déposez dans ce dossier les vidéos à traiter (SER, AVI…).
-
 Puis dans PlanStax : menu Fichier > Traitement par lot (Ctrl+L) > Démarrer.
 Chaque vidéo donne une image, enregistrée dans le dossier « output ».
-
 Les vidéos déjà traitées sont ignorées : vous pouvez en ajouter de nouvelles
 et relancer le traitement à tout moment.
+
+ENGLISH
+Put the videos to process in this folder (SER, AVI…).
+Then in PlanStax: File menu > Batch processing (Ctrl+L) > Start.
+Each video gives one image, saved in the "output" folder.
+Videos already processed are skipped: you can add new ones and start the
+processing again at any time.
+
+ESPAÑOL
+Deje en esta carpeta los vídeos que procesar (SER, AVI…).
+Luego, en PlanStax: menú Archivo > Procesamiento por lotes (Ctrl+L) > Iniciar.
+Cada vídeo da una imagen, guardada en la carpeta «output».
+Los vídeos ya procesados se omiten: puede añadir otros nuevos y volver a
+iniciar el procesamiento en cualquier momento.

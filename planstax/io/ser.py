@@ -15,6 +15,8 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
+from ..i18n import tr
+
 HEADER_SIZE = 178
 FILE_ID = b"LUCAM-RECORDER"
 
@@ -110,11 +112,11 @@ class SerFile:
         with open(self.path, "rb") as fh:
             raw = fh.read(HEADER_SIZE)
         if len(raw) < HEADER_SIZE:
-            raise ValueError("Fichier SER tronqué (en-tête incomplet)")
+            raise ValueError(tr("Fichier SER tronqué (en-tête incomplet)"))
         (file_id, lu_id, color_id, le_flag, width, height, depth, count,
          observer, instrument, telescope, dt, dt_utc) = _HEADER_STRUCT.unpack(raw)
         if not file_id.startswith(b"LUCAM"):
-            raise ValueError("Ce fichier n'est pas une vidéo SER valide")
+            raise ValueError(tr("Ce fichier n'est pas une vidéo SER valide"))
         self.header = SerHeader(
             color_id=color_id, width=width, height=height, pixel_depth=depth,
             frame_count=count, lu_id=lu_id, little_endian_flag=le_flag,
@@ -123,7 +125,7 @@ class SerFile:
         )
         h = self.header
         if h.width <= 0 or h.height <= 0:
-            raise ValueError("Dimensions d'image invalides dans l'en-tête SER")
+            raise ValueError(tr("Dimensions d'image invalides dans l'en-tête SER"))
 
         size = os.path.getsize(self.path)
         available = (size - HEADER_SIZE) // h.frame_bytes
@@ -131,7 +133,7 @@ class SerFile:
             # Capture interrupted before the header was finalised: trust the file size.
             h.frame_count = int(available)
         if h.frame_count <= 0:
-            raise ValueError("Le fichier SER ne contient aucune image")
+            raise ValueError(tr("Le fichier SER ne contient aucune image"))
 
         shape = (h.frame_count, h.height, h.width) + ((3,) if h.planes == 3 else ())
         dtype = np.uint8 if h.bytes_per_sample == 1 else np.dtype("<u2")
@@ -188,7 +190,7 @@ def write_ser(path: str, frames, color_id: int = COLOR_MONO, pixel_depth: int | 
     """Write frames (iterable of HxW or HxWx3 uint8/uint16 arrays, RGB order) to a SER file."""
     frames = list(frames)
     if not frames:
-        raise ValueError("Aucune image à écrire")
+        raise ValueError(tr("Aucune image à écrire"))
     first = frames[0]
     height, width = first.shape[:2]
     if pixel_depth is None:
@@ -204,7 +206,7 @@ def write_ser(path: str, frames, color_id: int = COLOR_MONO, pixel_depth: int | 
         fh.write(header)
         for f in frames:
             if f.shape[:2] != (height, width):
-                raise ValueError("Toutes les images doivent avoir la même taille")
+                raise ValueError(tr("Toutes les images doivent avoir la même taille"))
             data = np.ascontiguousarray(f, dtype=dtype)
             if color_id == COLOR_BGR:
                 data = np.ascontiguousarray(data[..., ::-1])

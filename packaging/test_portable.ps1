@@ -50,17 +50,18 @@ if ($b.ExitCode -ne 0 -or $images.Count -ne 1) { throw "Traitement par lot en é
 # 3. Mosaic of overlapping lunar fields.
 $fields = Join-Path $t "champs lune"
 & (Join-Path $root ".venv\Scripts\python.exe") -m planstax demo $fields --mosaic | Out-Null
-$m = Start-Process -FilePath $exe -PassThru -ArgumentList @("cli", "mosaic", "`"$fields`"")
+$m = Start-Process -FilePath $exe -PassThru -ArgumentList @("cli", "--lang", "en", "mosaic", "`"$fields`"")
 if (-not $m.WaitForExit(300000)) { Stop-Process -Id $m.Id -Force; throw "Mosaïque : pas de fin après 5 min" }
 $mosaic = Join-Path $fields "mosaique.tif"
 Write-Host "Mosaïque : code $($m.ExitCode), $(if (Test-Path $mosaic) { 'mosaique.tif produite' } else { 'aucun fichier' })"
 if ($m.ExitCode -ne 0 -or -not (Test-Path $mosaic)) { throw "Mosaïque en échec" }
 
-# 4. Interface: must still be running after 10 s (no start-up error).
+# 4. Interface (in Spanish): must still be running after 10 s (no start-up error).
 $env:QT_QPA_PLATFORM = "offscreen"
+$env:PLANSTAX_LANG = "es"
 $g = Start-Process -FilePath $exe -PassThru -ArgumentList @("`"$demo`"")
 Start-Sleep -Seconds 10
-Remove-Item Env:QT_QPA_PLATFORM
+Remove-Item Env:QT_QPA_PLATFORM, Env:PLANSTAX_LANG
 if ($g.HasExited) { throw "Interface arrêtée (code $($g.ExitCode))" }
 Stop-Process -Id $g.Id -Force
 $err = Join-Path $env:APPDATA "PlanStax\erreur-demarrage.txt"

@@ -11,6 +11,22 @@ def test_every_command_is_routed_to_the_cli():
     assert set(sub.choices) <= CLI_COMMANDS  # otherwise `python -m planstax <command>` opens the GUI
 
 
+def test_language_option_before_the_command(tmp_path, monkeypatch, capsys):
+    import sys
+
+    from planstax import __main__ as entry
+    from planstax.gui import app
+    monkeypatch.setenv("PLANSTAX_LANG", "fr")  # given back after the test
+    monkeypatch.setattr(sys, "argv", ["planstax", "--lang", "en", "demo", str(tmp_path / "a.ser")])
+    assert entry.main() == 0
+    assert "Demo video written" in capsys.readouterr().out
+    opened = []
+    monkeypatch.setattr(app, "main", lambda argv: opened.append((argv, os.environ["PLANSTAX_LANG"])) or 0)
+    monkeypatch.setattr(sys, "argv", ["planstax", "--lang=es", "video.ser"])
+    assert entry.main() == 0
+    assert opened == [(["planstax", "video.ser"], "es")]
+
+
 def test_cli_stack_into_new_folder(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
     demo = str(tmp_path / "jupiter.ser")
