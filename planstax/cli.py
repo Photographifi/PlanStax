@@ -66,6 +66,11 @@ def _output_path(src: str, out: str | None, suffix: str, ext: str, many: bool,
     return out
 
 
+def _print_rejected(n: int) -> None:
+    if n:
+        print("  " + tr("{n} images écartées d'office (vides, abîmées ou planète coupée par le bord)", n=n))
+
+
 def cmd_stack(args) -> int:
     settings = _settings(args)
     if args.percent is not None:
@@ -94,6 +99,7 @@ def cmd_stack(args) -> int:
             src.close()
         print("\n  " + tr("{stacked} images empilées, {points} points d'alignement, {seconds} s",
                           stacked=len(pipe.selected), points=len(pipe.points), seconds=f"{time.time() - t0:.1f}"))
+        _print_rejected(sum(pipe.analysis.rejected_counts()))
         ext = "." + args.format
         out = _output_path(path, args.output, "_stack", ext, many)
         save_image(out, stacked, bits=args.bits)
@@ -135,6 +141,7 @@ def cmd_batch(args) -> int:
         print("\n  " + tr("{stacked}/{frames} images empilées, {points} points d'alignement, {seconds} s → {names}",
                           stacked=r.stacked, frames=r.frames, points=r.points, seconds=f"{r.seconds:.0f}",
                           names=", ".join(os.path.basename(o) for o in r.outputs)))
+        _print_rejected(r.rejected)
         if not r.points:
             print("  " + tr("attention : aucun point d'alignement (vérifiez Luminosité min./max.)"))
     if opts.mosaic:

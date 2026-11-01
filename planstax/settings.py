@@ -26,6 +26,7 @@ class AlignSettings:
     min_structure: float = 0.05   # drop points with less detail than 5 % of the best one
     reference_frames: int = 0     # frames averaged into the reference (0 = automatic)
     quality_noise: float = 1.5    # noise robustness of the quality estimator (blur sigma)
+    reject_frames: bool = True    # leave out empty frames and frames where the planet is cut
 
 
 @dataclass

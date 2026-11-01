@@ -20,7 +20,7 @@ from ..io.sources import FrameSource, luminance
 from ..settings import Settings
 from .alignment import GlobalAligner, StabilityMap, sample_shifted
 from .localalign import LocalAligner, PlacementReport, place_points_with_report
-from .quality import analyze_frame, detect_surface
+from .quality import COLOUR, CUT, DARK, KEEP, analyze_frame, detect_surface, reject_frames
 from .stacking import Stacker
 
 Progress = Callable[[float, str], None]
@@ -78,15 +78,24 @@ def map_frames(source: FrameSource, indices, fn, *, workers: int, progress: Prog
 
 @dataclass
 class Analysis:
-    quality: np.ndarray      # (n,) global quality
+    quality: np.ndarray      # (n,) global quality, 0 for the rejected frames
     centroids: np.ndarray    # (n, 2)
     brightness: np.ndarray   # (n,)
     surface: bool
+    rejected: np.ndarray     # (n,) why each frame is left out: KEEP, DARK, COLOUR or CUT (core.quality)
+
+    @property
+    def usable(self) -> np.ndarray:
+        return self.rejected == KEEP
 
     @property
     def order(self) -> np.ndarray:
-        """Frame indices sorted best first."""
-        return np.argsort(-self.quality, kind="stable")
+        """Frame indices sorted best first, the rejected frames last."""
+        return np.lexsort((-self.quality, ~self.usable))
+
+    def rejected_counts(self) -> tuple[int, int, int]:
+        """(empty or dark frames, frames where the planet is cut, frames with wrong colours)."""
+        return tuple(int(np.count_nonzero(self.rejected == r)) for r in (DARK, CUT, COLOUR))
 
 
 @dataclass
@@ -116,21 +125,29 @@ class Pipeline:
 
     # ------------------------------------------------------------------ steps
     def analyze(self, progress: Progress | None = None, cancel: threading.Event | None = None) -> Analysis:
-        noise = self.settings.align.quality_noise
+        s = self.settings.align
 
         def fn(i: int, frame: np.ndarray):
-            st = analyze_frame(luminance(frame), noise)
-            return st.quality, st.centroid, st.brightness
+            st = analyze_frame(luminance(frame), s.quality_noise, frame)
+            return st.quality, st.centroid, st.brightness, st.cut, st.colour
 
         res = map_frames(self.source, range(len(self.source)), fn, workers=self.workers,
                          progress=progress, cancel=cancel, label=tr("Analyse de la qualité"))
         quality = np.array([r[0] for r in res], dtype=np.float64)
         centroids = np.array([r[1] for r in res], dtype=np.float64)
         brightness = np.array([r[2] for r in res], dtype=np.float64)
-        best = int(np.argmax(quality))
-        mode = self.settings.align.mode
-        surface = (mode == "surface") or (mode == "auto" and detect_surface(luminance(self.source.frame(best))))
-        self.analysis = Analysis(quality, centroids, brightness, surface)
+        cut = np.array([r[3] for r in res], dtype=bool)
+        colour = np.array([r[4] for r in res], dtype=np.float64) if self.source.is_color else None
+        rejected = np.full(len(quality), KEEP, dtype=np.int8)
+        if s.reject_frames:
+            rejected = reject_frames(brightness, cut, colour)
+        best = int(np.argmax(np.where(rejected == KEEP, quality, -np.inf)))
+        surface = (s.mode == "surface") or (s.mode == "auto" and detect_surface(luminance(self.source.frame(best))))
+        if surface and s.reject_frames:
+            # A surface fills the frame: reaching its edge is the rule, no reason to leave a frame out.
+            rejected = reject_frames(brightness, np.zeros_like(cut), colour)
+        quality[rejected != KEEP] = 0.0
+        self.analysis = Analysis(quality, centroids, brightness, surface, rejected)
         self.alignment = None
         return self.analysis
 
@@ -139,7 +156,7 @@ class Pipeline:
         if self.analysis is None:
             self.analyze(progress, cancel)
         a = self.analysis
-        n = len(self.source)
+        n = int(np.count_nonzero(a.usable))
         count = self.settings.align.reference_frames or int(np.clip(round(n * 0.1), 3, 50))
         count = int(max(1, min(count, n)))
         order = a.order
@@ -209,17 +226,17 @@ class Pipeline:
         return self.alignment
 
     def select(self) -> np.ndarray:
-        """Global frame selection ("limit") from the quality ranking."""
+        """Global frame selection ("limit") from the quality ranking, among the usable frames."""
         if self.analysis is None:
             raise RuntimeError("Analyse non effectuée")
         lim = self.settings.limit
         q = self.analysis.quality
-        order = self.analysis.order
-        n = len(order)
+        n = int(np.count_nonzero(self.analysis.usable))
+        order = self.analysis.order[:n]  # the rejected frames never enter the stack
         if lim.method == "count":
             k = int(np.clip(lim.count, 1, n))
         elif lim.method == "quality":
-            k = int(max(1, np.count_nonzero(q >= q.max() * lim.min_quality / 100.0)))
+            k = int(max(1, np.count_nonzero(q[order] >= q.max() * lim.min_quality / 100.0)))
         else:
             k = int(np.clip(round(n * lim.percent / 100.0), 1, n))
         self.selected = np.sort(order[:k])

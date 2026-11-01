@@ -403,13 +403,16 @@ class BatchDialog(QDialog):
         self._done += 1
         names = ", ".join(os.path.basename(o) for o in result.outputs)
         if result.points:
-            self._set_state(row, tr("✓ {stacked}/{frames} images, {points} points, {seconds} s → {names}",
-                                    stacked=result.stacked, frames=result.frames, points=result.points,
-                                    seconds=f"{result.seconds:.0f}", names=names))
+            text = tr("✓ {stacked}/{frames} images, {points} points, {seconds} s → {names}",
+                      stacked=result.stacked, frames=result.frames, points=result.points,
+                      seconds=f"{result.seconds:.0f}", names=names)
         else:  # stacked with the global alignment only: worth checking the brightness limits
-            self._set_state(row, tr("⚠ {stacked}/{frames} images, aucun point d'alignement "
-                                    "(vérifiez Luminosité min./max.) → {names}",
-                                    stacked=result.stacked, frames=result.frames, names=names))
+            text = tr("⚠ {stacked}/{frames} images, aucun point d'alignement "
+                      "(vérifiez Luminosité min./max.) → {names}",
+                      stacked=result.stacked, frames=result.frames, names=names)
+        if result.rejected:
+            text += tr(" · {n} écartées d'office (vides, abîmées ou coupées)", n=result.rejected)
+        self._set_state(row, text)
         self._update_overall(0.0)
 
     def _on_failed(self, row: int, message: str) -> None:

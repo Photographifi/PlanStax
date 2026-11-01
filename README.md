@@ -242,6 +242,14 @@ Rien n'est écrit dans `Program Files` ni dans le registre.
 
 - **64 bits et multicœur** : plus de limite à 2–4 Go, et les vidéos de plusieurs Go sont lues
   sans être chargées entièrement en mémoire.
+- **Images inutilisables écartées d'office** (onglet 1, case cochée par défaut) : images presque
+  noires (champ vide), images aux couleurs anormales et, pour une planète, images où elle touche
+  le bord du champ (suivi, vent). Une image arrivée de la caméra décalée d'une ligne a sa matrice
+  de couleurs lue de travers : le vert et le bleu s'échangent, et le motif en labyrinthe qui en
+  résulte passerait pour du détail. Elle se repère à sa couleur, très différente de celle des
+  images voisines. Ces images ne servent ni à la référence ni à l'empilement. Le pourcentage gardé (onglet 2) se
+  compte sur les images restantes. Si la planète touche le bord dans la plupart des images
+  (cadrage serré), ces images sont gardées.
 - **Alignement local précis au sous-pixel** : corrélation, puis affinage de type Lucas-Kanade.
   Le long d'un bord de disque, où rien ne permet de mesurer un glissement, le point reprend le
   décalage global au lieu d'inventer un mouvement.
@@ -296,7 +304,7 @@ bibliothèque DLL trouve ses dépendances, Visual C++ compris, pour fonctionner 
 ## Développement
 
 ```powershell
-.venv\Scripts\python.exe -m pytest        # 75 tests : formats, alignement, empilement, mosaïques, lot, interface, langues, archives
+.venv\Scripts\python.exe -m pytest        # 79 tests : formats, alignement, empilement, mosaïques, lot, interface, langues, archives
 ```
 
 Organisation du code :

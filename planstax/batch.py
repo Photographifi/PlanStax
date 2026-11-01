@@ -46,6 +46,7 @@ class VideoResult:
     frames: int = 0
     stacked: int = 0
     points: int = 0
+    rejected: int = 0             # frames left out before ranking (empty, damaged, or planet cut)
     seconds: float = 0.0
 
 
@@ -90,6 +91,7 @@ def process_video(path: str, settings: Settings, out_dir: str, opts: BatchOption
         pipe = Pipeline(src, settings.copy(), workers=workers)
         stacked = pipe.run_all(progress, cancel)
         result.stacked, result.points = len(pipe.selected), len(pipe.points)
+        result.rejected = sum(pipe.analysis.rejected_counts())
     finally:
         src.close()
     os.makedirs(out_dir, exist_ok=True)

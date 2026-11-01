@@ -36,6 +36,9 @@ TRANSLATIONS = {
     "attention : aucun point d'alignement (vérifiez Luminosité min./max.)": (
         "warning: no alignment point (check Min./Max. brightness)",
         "atención: ningún punto de alineación (revise Brillo mín./máx.)"),
+    "{n} images écartées d'office (vides, abîmées ou planète coupée par le bord)": (
+        "{n} frames left out automatically (empty, damaged or planet cut by the frame edge)",
+        "{n} imágenes descartadas automáticamente (vacías, dañadas o planeta cortado por el borde)"),
     "Mosaïque de {n} image(s)": ("Mosaic of {n} image(s)", "Mosaico de {n} imagen(es)"),
     "Aucun réglage RegiStax (wavelet-*.ini, estimate-*.ini…) dans ce dossier.": (
         "No RegiStax settings (wavelet-*.ini, estimate-*.ini…) in this folder.",
@@ -235,6 +238,9 @@ TRANSLATIONS = {
     "⚠ {stacked}/{frames} images, aucun point d'alignement (vérifiez Luminosité min./max.) → {names}": (
         "⚠ {stacked}/{frames} frames, no alignment point (check Min./Max. brightness) → {names}",
         "⚠ {stacked}/{frames} imágenes, ningún punto de alineación (revise Brillo mín./máx.) → {names}"),
+    " · {n} écartées d'office (vides, abîmées ou coupées)": (
+        " · {n} left out automatically (empty, damaged or cut)",
+        " · {n} descartadas automáticamente (vacías, dañadas o cortadas)"),
     "✗ Erreur : {error}": ("✗ Error: {error}", "✗ Error: {error}"),
     "Terminé : {n} image(s) produite(s)": ("Done: {n} image(s) produced", "Terminado: {n} imagen(es) producida(s)"),
     ", {n} vidéo(s) en erreur": (", {n} video(s) failed", ", {n} vídeo(s) con error"),
@@ -317,6 +323,14 @@ TRANSLATIONS = {
         "Smoothing applied before measuring sharpness: increase it for noisy videos so that noise is not taken for detail.",
         "Suavizado aplicado antes de medir la nitidez: auméntelo en vídeos con ruido para que el ruido no pase por detalle."),
     "Robustesse au bruit :": ("Noise robustness:", "Robustez al ruido:"),
+    "Écarter les images inutilisables": ("Leave out unusable frames", "Descartar las imágenes inutilizables"),
+    "Laisse de côté les images presque noires (champ vide), celles aux couleurs anormales (image mal transmise par la caméra) et celles où la planète touche le bord du champ (suivi, vent). En mode Surface, les images qui touchent le bord sont gardées.": (
+        "Leaves out nearly black frames (empty field), frames with abnormal colours (frame badly "
+        "transmitted by the camera) and frames where the planet touches the edge of the field "
+        "(tracking, wind). In Surface mode, frames that touch the edge are kept.",
+        "Deja de lado las imágenes casi negras (campo vacío), las de colores anómalos (imagen mal "
+        "transmitida por la cámara) y aquellas en las que el planeta toca el borde del campo "
+        "(seguimiento, viento). En modo Superficie, se conservan las imágenes que tocan el borde."),
     "Nombre de meilleures images moyennées pour la référence (auto = 10 %, 3 à 50)": (
         "Number of best frames averaged into the reference (auto = 10 %, 3 to 50)",
         "Número de mejores imágenes promediadas para la referencia (auto = 10 %, de 3 a 50)"),
@@ -350,6 +364,9 @@ TRANSLATIONS = {
     "Pourcentage :": ("Percentage:", "Porcentaje:"),
     "Nombre :": ("Number:", "Número:"),
     "En pourcentage de la qualité de la meilleure image": ("As a percentage of the quality of the best frame", "En porcentaje de la calidad de la mejor imagen"),
+    "En pourcentage des images utilisables (hors images écartées d'office)": (
+        "As a percentage of the usable frames (not counting those left out automatically)",
+        "En porcentaje de las imágenes utilizables (sin contar las descartadas automáticamente)"),
     "Qualité minimale :": ("Minimum quality:", "Calidad mínima:"),
     "Qualité des images": ("Quality of the frames", "Calidad de las imágenes"),
     "La barre sous l'image permet de parcourir la vidéo, dans l'ordre chronologique ou de la meilleure à la pire image.": (
@@ -483,6 +500,24 @@ TRANSLATIONS = {
     " · rang {rank} · qualité {quality} %": (" · rank {rank} · quality {quality} %", " · puesto {rank} · calidad {quality} %"),
     " · retenue": (" · kept", " · conservada"),
     " · écartée": (" · left out", " · descartada"),
+    " · écartée d'office : image vide ou trop sombre": (
+        " · left out automatically: empty or too dark frame",
+        " · descartada automáticamente: imagen vacía o demasiado oscura"),
+    " · écartée d'office : planète coupée par le bord": (
+        " · left out automatically: planet cut by the frame edge",
+        " · descartada automáticamente: planeta cortado por el borde"),
+    " · écartée d'office : couleurs anormales (image mal transmise)": (
+        " · left out automatically: abnormal colours (frame badly transmitted)",
+        " · descartada automáticamente: colores anómalos (imagen mal transmitida)"),
+    "{n} images écartées d'office : {reasons}.": (
+        "{n} frames left out automatically: {reasons}.",
+        "{n} imágenes descartadas automáticamente: {reasons}."),
+    "{n} vides ou trop sombres": ("{n} empty or too dark", "{n} vacías o demasiado oscuras"),
+    "{n} aux couleurs anormales (image mal transmise)": (
+        "{n} with abnormal colours (frame badly transmitted)",
+        "{n} con colores anómalos (imagen mal transmitida)"),
+    "{n} où la planète touche le bord": (
+        "{n} where the planet touches the edge", "{n} en las que el planeta toca el borde"),
     "Décalages mesurés — rouge : ({rx}, {ry}) px, bleu : ({bx}, {by}) px": (
         "Shifts measured — red: ({rx}, {ry}) px, blue: ({bx}, {by}) px",
         "Desplazamientos medidos — rojo: ({rx}, {ry}) px, azul: ({bx}, {by}) px"),

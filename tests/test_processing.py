@@ -7,12 +7,12 @@ from planstax.core.alignment import GlobalAligner, StabilityMap, sample_shifted
 from planstax.core.localalign import LocalAligner, place_points, place_points_with_report
 from planstax.core.pipeline import Pipeline
 from planstax.core.postprocess import estimate_rgb_shifts
-from planstax.core.quality import analyze_frame
+from planstax.core.quality import COLOUR, CUT, DARK, KEEP, analyze_frame, reject_frames
 from planstax.core.wavelets import apply_wavelets
-from planstax.io.ser import COLOR_MONO, COLOR_RGB, write_ser
+from planstax.io.ser import COLOR_BAYER_RGGB, COLOR_MONO, COLOR_RGB, write_ser
 from planstax.io.sources import open_source
 from planstax.settings import AlignSettings, Settings, WaveletSettings
-from planstax.synth import make_planet, make_sequence
+from planstax.synth import make_moon, make_planet, make_sequence
 
 
 def _shift(img, dx, dy):
@@ -94,6 +94,99 @@ def test_quality_prefers_sharp_frames():
     truth = make_planet(200)
     q = [analyze_frame(cv2.GaussianBlur(truth, (0, 0), s)).quality for s in (0.5, 1.5, 3.0)]
     assert q[0] > q[1] > q[2]
+
+
+def test_reject_frames_rules():
+    b = np.array([0.4, 0.41, 0.39, 0.005, 0.4, 0.38])
+    assert list(reject_frames(b, [False, True, False, True, False, False])) == [KEEP, CUT, KEEP, DARK, KEEP, KEEP]
+    # The planet reaches the edge in most frames: tight framing, these frames are all there is.
+    assert list(reject_frames(b, [True, True, True, False, True, False])) == [KEEP, KEEP, KEEP, DARK, KEEP, KEEP]
+    # Colour: a sudden jump is left out, a slow drift (automatic white balance) is not.
+    n = 200
+    drift = np.linspace(0.0, 0.15, n)
+    colour = np.stack([0.4 + drift / 2, 0.4 - drift, 0.2 + drift / 2], axis=1)
+    colour[[50, 120]] = (0.4, 0.2, 0.4)
+    reason = reject_frames(np.full(n, 0.5), np.zeros(n, bool), colour)
+    assert list(np.flatnonzero(reason)) == [50, 120] and np.all(reason[[50, 120]] == COLOUR)
+
+
+def _translate(img, dx, dy):
+    """Shift with a black border (the planet leaves the field instead of being mirrored)."""
+    m = np.float32([[1, 0, dx], [0, 1, dy]])
+    return cv2.warpAffine(img, m, (img.shape[1], img.shape[0]), borderMode=cv2.BORDER_CONSTANT)
+
+
+def test_pipeline_leaves_out_empty_and_cut_frames(tmp_path):
+    # Bad tracking (the 22_07_46 Saturn video): nearly black frames, and frames where the planet
+    # is cut by the frame edge. Divided by their squared brightness, the noise of the black
+    # frames used to come out as the best detail of the video and made the reference.
+    truth = make_planet(200, seed=5)
+    frames, _, _ = make_sequence(truth, n=40, seed=3, max_shift=6.0)
+    rng = np.random.default_rng(1)
+    dark, cut = [5, 17, 30], [8, 22, 35]
+    for i in dark:
+        frames[i] = np.clip(rng.normal(0.01, 0.01, truth.shape), 0, 1).astype(np.float32)
+    for k, i in enumerate(cut):
+        frames[i] = _translate(frames[i], (-1) ** k * 70.0, 25.0)
+    path = str(tmp_path / "bad.ser")
+    write_ser(path, [(f * 255 + 0.5).astype(np.uint8) for f in frames])
+    s = Settings()
+    s.limit.percent = 100
+    pipe = Pipeline(open_source(path), s, workers=2)
+    a = pipe.analyze()
+    assert list(np.flatnonzero(a.rejected == DARK)) == dark
+    assert list(np.flatnonzero(a.rejected == CUT)) == cut
+    assert a.rejected_counts() == (3, 3, 0) and not set(a.order[:34]) & set(dark + cut)
+    pipe.build_reference()
+    pipe.place_points()
+    pipe.stack()
+    assert len(pipe.selected) == 34 and not set(pipe.selected) & set(dark + cut)
+    # Without the rejection, a black frame is ranked first.
+    s.align.reject_frames = False
+    pipe = Pipeline(open_source(path), s, workers=2)
+    a = pipe.analyze()
+    assert int(a.order[0]) in dark and not np.any(a.rejected)
+
+
+def test_frames_shifted_by_one_row_are_left_out(tmp_path):
+    # Colour camera whose link now and then delivers a frame one row off (the 22_07_46 video):
+    # its colour matrix is read a row off, green and blue swap, and the maze pattern left by
+    # the demosaicing passes for the finest detail of the video.
+    p = make_planet(200, seed=5)
+    truth = np.dstack([p, p * 0.85, p * 0.4])  # yellowish, like Saturn
+    frames, _, _ = make_sequence(truth, n=30, seed=3, max_shift=6.0)
+    raws = []
+    for f in frames:  # RGGB mosaic
+        raw = np.empty(f.shape[:2], np.float32)
+        raw[0::2, 0::2], raw[0::2, 1::2] = f[0::2, 0::2, 0], f[0::2, 1::2, 1]
+        raw[1::2, 0::2], raw[1::2, 1::2] = f[1::2, 0::2, 1], f[1::2, 1::2, 2]
+        raws.append((raw * 255 + 0.5).astype(np.uint8))
+    bad = [7, 19]
+    for i in bad:
+        raws[i] = np.roll(raws[i], 1, axis=0)
+    path = str(tmp_path / "bayer.ser")
+    write_ser(path, raws, color_id=COLOR_BAYER_RGGB)
+    a = Pipeline(open_source(path), Settings(), workers=2).analyze()
+    assert list(np.flatnonzero(a.rejected)) == bad and a.rejected_counts() == (0, 0, 2)
+    s = Settings()
+    s.align.reject_frames = False
+    a = Pipeline(open_source(path), s, workers=2).analyze()
+    assert int(a.order[0]) in bad
+
+
+def test_surface_frames_reaching_the_edge_are_kept(tmp_path):
+    # Lunar surface, the limb crossing the field in 3 frames out of 10: there the lit part covers
+    # half the frame and reaches its edge, as a cut planet would. A surface always reaches the
+    # frame edge, which is no reason to drop these frames.
+    moon = make_moon(300, 400, limb=False)
+    yy, xx = np.mgrid[0:300, 0:400]
+    moon = moon * (np.hypot(xx - 450, yy - 150) < 300)
+    frames = [moon[k:k + 200, 100:400] for k in range(0, 100, 15)] + [moon[k:k + 200, 0:300] for k in (0, 50, 100)]
+    assert [analyze_frame(f).cut for f in frames] == [False] * 7 + [True] * 3
+    path = str(tmp_path / "limb.ser")
+    write_ser(path, [(f * 255 + 0.5).astype(np.uint8) for f in frames])
+    a = Pipeline(open_source(path), Settings(), workers=2).analyze()
+    assert a.surface and not np.any(a.rejected)
 
 
 def test_local_alignment_measures_local_shift():
@@ -258,6 +351,7 @@ def test_pipeline_end_to_end(tmp_path, color):
     out = pipe.run_all()
 
     assert out.shape == truth.shape
+    assert not np.any(pipe.analysis.rejected)  # a well-framed video loses no frame
     # The frames picked as best really are the least blurred ones.
     best = pipe.analysis.order[:10]
     assert np.median(sigmas[best]) < np.median(sigmas)

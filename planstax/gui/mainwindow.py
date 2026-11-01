@@ -19,6 +19,7 @@ from .. import APP_NAME, __version__
 from ..core import Pipeline, auto_balance, estimate_rgb_shifts, finish
 from ..i18n import LANGUAGES, number, saved_language, tr
 from ..core.postprocess import apply_post, apply_pre
+from ..core.quality import COLOUR, DARK, KEEP
 from ..core.wavelets import WaveletProcessor, amount_from_gain, gain_from_amount
 from ..io import IMAGE_EXTENSIONS, VIDEO_EXTENSIONS, open_source, read_image, save_image
 from ..io.sources import NO_BAYER
@@ -332,6 +333,13 @@ class MainWindow(QMainWindow):
                                       "des vidéos bruitées afin que le bruit ne passe pas pour du détail."))
         self._bind_attr(self.noise_spin, A, "quality_noise", self._invalidate_analysis)
         form.addRow(tr("Robustesse au bruit :"), self.noise_spin)
+        self.reject_check = QCheckBox(tr("Écarter les images inutilisables"))
+        self.reject_check.setToolTip(tr("Laisse de côté les images presque noires (champ vide), celles aux "
+                                        "couleurs anormales (image mal transmise par la caméra) et celles où "
+                                        "la planète touche le bord du champ (suivi, vent). En mode Surface, "
+                                        "les images qui touchent le bord sont gardées."))
+        self._bind_attr(self.reject_check, A, "reject_frames", self._invalidate_analysis)
+        form.addRow(self.reject_check)
         self.ref_spin = spin(0, 500, 0)
         self.ref_spin.setSpecialValueText("auto")
         self.ref_spin.setToolTip(tr("Nombre de meilleures images moyennées pour la référence (auto = 10 %, 3 à 50)"))
@@ -400,6 +408,7 @@ class MainWindow(QMainWindow):
         self._bind_attr(self.limit_method, L, "method", self._on_limit_changed)
         form.addRow(tr("Méthode :"), self.limit_method)
         self.limit_percent = dspin(0.1, 100.0, 80.0, 5.0, 1, " %")
+        self.limit_percent.setToolTip(tr("En pourcentage des images utilisables (hors images écartées d'office)"))
         self._bind_attr(self.limit_percent, L, "percent", self._on_limit_changed)
         form.addRow(tr("Pourcentage :"), self.limit_percent)
         self.limit_count = spin(1, 1_000_000, 100)
@@ -977,22 +986,32 @@ class MainWindow(QMainWindow):
             return
         p.settings.limit = dataclasses.replace(self.settings.limit)
         sel = p.select()
-        self.quality_plot.set_data(p.analysis.quality, len(sel))
+        a = p.analysis
+        self.quality_plot.set_data(a.quality[a.usable], len(sel))
         n = len(self.source)
-        self.select_label.setText(tr("{kept} images retenues sur {frames} ({percent} %)", kept=len(sel), frames=n,
-                                     percent=f"{100 * len(sel) / n:.0f}"))
+        text = tr("{kept} images retenues sur {frames} ({percent} %)", kept=len(sel), frames=n,
+                  percent=f"{100 * len(sel) / n:.0f}")
+        dark, cut, colour = a.rejected_counts()
+        reasons = [part for count, part in (
+            (dark, tr("{n} vides ou trop sombres", n=dark)),
+            (colour, tr("{n} aux couleurs anormales (image mal transmise)", n=colour)),
+            (cut, tr("{n} où la planète touche le bord", n=cut))) if count]
+        if reasons:
+            text += "\n" + tr("{n} images écartées d'office : {reasons}.", n=dark + cut + colour,
+                              reasons=", ".join(reasons))
+        self.select_label.setText(text)
 
     def _on_plot_cutoff(self, fraction: float) -> None:
         p = self.pipeline
         if p is None or p.analysis is None:
             return
-        n = len(p.analysis.quality)
+        q = np.sort(p.analysis.quality[p.analysis.usable])[::-1]  # the frames on the plot
+        n = len(q)
         keep = max(1, int(round(fraction * n)))
         lim = self.settings.limit
         if lim.method == "count":
             lim.count = keep
         elif lim.method == "quality":
-            q = np.sort(p.analysis.quality)[::-1]
             lim.min_quality = float(q[keep - 1] / q[0] * 100.0)
         else:
             lim.percent = max(0.1, 100.0 * keep / n)
@@ -1042,7 +1061,14 @@ class MainWindow(QMainWindow):
         self.view.set_image(frame, keep_view)
         self.view.set_points(None)
         info = tr("n° {index}/{frames}", index=idx + 1, frames=len(self.source))
-        if a is not None:
+        if a is not None and a.rejected[idx] != KEEP:
+            if a.rejected[idx] == DARK:
+                info += tr(" · écartée d'office : image vide ou trop sombre")
+            elif a.rejected[idx] == COLOUR:
+                info += tr(" · écartée d'office : couleurs anormales (image mal transmise)")
+            else:
+                info += tr(" · écartée d'office : planète coupée par le bord")
+        elif a is not None:
             rank = int(np.flatnonzero(a.order == idx)[0]) + 1
             q = a.quality[idx] / max(a.quality.max(), 1e-12) * 100
             sel = self.pipeline.selected
