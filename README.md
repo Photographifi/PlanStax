@@ -253,6 +253,11 @@ Rien n'est écrit dans `Program Files` ni dans le registre.
 - **Alignement local précis au sous-pixel** : corrélation, puis affinage de type Lucas-Kanade.
   Le long d'un bord de disque, où rien ne permet de mesurer un glissement, le point reprend le
   décalage global au lieu d'inventer un mouvement.
+- **Vidéo qui dérive dans le champ** (suivi imparfait) : chaque image est recalée sur la
+  référence, et une partie de la zone recalée tombe alors au-delà de son bord. Elle n'y compte
+  pas : dans la référence comme dans l'empilement, une image ne compte que là où elle couvre
+  vraiment le champ. Les bords de l'image finale reposent sur moins d'images, mais rien n'y est
+  inventé (pas de reflet du limbe ou de la planète dans le ciel).
 - **Surfaces et paysages** (Lune, Soleil, prises de vue terrestres) : l'alignement global se
   fait sur toute l'image et non sur son centre. Il s'appuie sur les zones qui restent fixes d'une
   image à l'autre, repérées pendant la construction de la référence (la colline plutôt que la
@@ -304,7 +309,7 @@ bibliothèque DLL trouve ses dépendances, Visual C++ compris, pour fonctionner 
 ## Développement
 
 ```powershell
-.venv\Scripts\python.exe -m pytest        # 79 tests : formats, alignement, empilement, mosaïques, lot, interface, langues, archives
+.venv\Scripts\python.exe -m pytest        # 80 tests : formats, alignement, empilement, mosaïques, lot, interface, langues, archives
 ```
 
 Organisation du code :
