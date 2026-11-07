@@ -375,3 +375,27 @@ def test_pipeline_scale_2x(tmp_path):
     s.stack.scale = 2.0
     out = Pipeline(open_source(path), s, workers=2).run_all()
     assert out.shape == (320, 320)
+
+
+def test_drifting_view_leaves_no_ghost_past_the_frame_edges(tmp_path):
+    # The lunar limb near the right edge of the field, the view drifting by up to 40 px during
+    # the capture (the lune_20090627 case). Frames that drifted do not cover the sky past the
+    # limb: mirroring them there (BORDER_REFLECT) put a bright reversed copy of the limb into
+    # the sky of the reference and of the stack.
+    rng = np.random.default_rng(3)
+    yy, xx = np.mgrid[0:300, 0:420]
+    moon = make_moon(300, 420, limb=False) * (np.hypot(xx + 160, yy - 150) < 500)  # limb at x≈340
+    starts = rng.uniform(100, 140, 24).round().astype(int)
+    frames = []
+    for x0 in starts:
+        f = cv2.GaussianBlur(moon[30:270, x0:x0 + 240], (0, 0), rng.uniform(0.5, 1.5))
+        frames.append(np.clip(f + rng.normal(0, 0.01, f.shape), 0, 1))
+    path = str(tmp_path / "drift.ser")
+    write_ser(path, [(f * 255 + 0.5).astype(np.uint8) for f in frames])
+    pipe = Pipeline(open_source(path), Settings(), workers=2)
+    out = pipe.run_all()
+    x0 = starts[pipe.reference_index]
+    sky = cv2.erode((moon[30:270, x0:x0 + 240] < 0.01).astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
+    assert sky[:, -30:].mean() > 0.5  # the sky the drifting frames do not cover
+    for img in (pipe.reference, out):
+        assert np.percentile(img[sky], 99) < 0.05, np.percentile(img[sky], 99)

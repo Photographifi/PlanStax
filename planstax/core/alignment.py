@@ -14,14 +14,48 @@ from .quality import object_threshold, smooth
 
 
 def sample_shifted(img: np.ndarray, x0: float, y0: float, width: int, height: int,
-                   scale: float = 1.0, interpolation: int = cv2.INTER_CUBIC) -> np.ndarray:
+                   scale: float = 1.0, interpolation: int = cv2.INTER_CUBIC,
+                   border: int = cv2.BORDER_REFLECT) -> np.ndarray:
     """Return the (height x width) window whose top-left output pixel samples img at (x0, y0),
     with an optional zoom (`scale` output pixels per input pixel)."""
     inv = 1.0 / scale
     m = np.array([[inv, 0.0, x0], [0.0, inv, y0]], dtype=np.float64)
     return cv2.warpAffine(img, m, (int(width), int(height)),
                           flags=interpolation | cv2.WARP_INVERSE_MAP,
-                          borderMode=cv2.BORDER_REFLECT)
+                          borderMode=border)
+
+
+# A frame drifts across the field during a capture, so the window sampled from it for the
+# stack often reaches past its edges. What lies there is unknown: mirroring the frame
+# (BORDER_REFLECT) would add a reversed copy of the limb or of a planet into the sky — ghost
+# halos along the edges of the stack. Each frame is weighted instead, pixel by pixel, by
+# whether it covers that pixel, fading out over EDGE_FEATHER source pixels at its edges so
+# that no seam is left where the number of frames changes.
+EDGE_FEATHER = 4.0
+# Weight of the uncovered pixels, so that a pixel no frame reaches still gets a value (the
+# frames' nearest edge, BORDER_REPLICATE) while staying negligible wherever one frame does.
+COVERAGE_FLOOR = 1e-6
+
+
+def _edge_ramp(start: float, count: int, step: float, size: int, feather: float) -> np.ndarray:
+    pos = start + np.arange(count, dtype=np.float64) * step
+    dist = np.minimum(pos, (size - 1) - pos)  # source pixels to the nearest edge, < 0 outside
+    return np.clip((dist + 0.5) / feather, 0.0, 1.0).astype(np.float32)
+
+
+def coverage_ramps(src_width: int, src_height: int, x0: float, y0: float, width: int, height: int,
+                   scale: float = 1.0, feather: float = EDGE_FEATHER) -> tuple[np.ndarray, np.ndarray]:
+    """coverage() as its two factors: (per row, per column)."""
+    inv = 1.0 / scale
+    return (_edge_ramp(y0, int(height), inv, src_height, feather),
+            _edge_ramp(x0, int(width), inv, src_width, feather))
+
+
+def coverage(src_width: int, src_height: int, x0: float, y0: float, width: int, height: int,
+             scale: float = 1.0, feather: float = EDGE_FEATHER) -> np.ndarray:
+    """Weight, in [0, 1], of each pixel of sample_shifted(img, x0, y0, width, height, scale)
+    for an img of src_width x src_height: 1 inside the source frame, 0 outside it."""
+    return np.outer(*coverage_ramps(src_width, src_height, x0, y0, width, height, scale, feather))
 
 
 def object_bbox(lum: np.ndarray) -> tuple[int, int, int, int]:
@@ -191,13 +225,16 @@ class GlobalAligner:
         d = np.asarray(centroid, dtype=np.float64) - self.ref_centroid
 
         rx, ry, rw, rh = self.roi
-        roi = sample_shifted(g, rx + d[0], ry + d[1], rw, rh, interpolation=cv2.INTER_LINEAR)
+        # Near the frame edge, a mirrored copy of the planet would add a false correlation peak.
+        roi = sample_shifted(g, rx + d[0], ry + d[1], rw, rh, interpolation=cv2.INTER_LINEAR,
+                             border=cv2.BORDER_REPLICATE)
         (sx, sy), response = cv2.phaseCorrelate(self.ref_roi, self._prep(roi))
         if not (abs(sx) <= self.search and abs(sy) <= self.search):
             sx = sy = 0.0  # implausible correction of the centroid estimate: ignore it
 
         ex, ey, ew, eh = self._ecc_box
-        crop = sample_shifted(g, rx + d[0] + ex, ry + d[1] + ey, ew, eh, interpolation=cv2.INTER_LINEAR)
+        crop = sample_shifted(g, rx + d[0] + ex, ry + d[1] + ey, ew, eh, interpolation=cv2.INTER_LINEAR,
+                              border=cv2.BORDER_REPLICATE)
         warp = np.array([[1, 0, sx], [0, 1, sy]], dtype=np.float32)
         try:
             _, warp = cv2.findTransformECC(self._ecc_ref, crop, warp, cv2.MOTION_TRANSLATION,

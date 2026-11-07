@@ -13,12 +13,13 @@ from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from typing import Callable
 
+import cv2
 import numpy as np
 
 from ..i18n import tr
 from ..io.sources import FrameSource, luminance
 from ..settings import Settings
-from .alignment import GlobalAligner, StabilityMap, sample_shifted
+from .alignment import COVERAGE_FLOOR, GlobalAligner, StabilityMap, coverage, sample_shifted
 from .localalign import LocalAligner, PlacementReport, place_points_with_report
 from .quality import COLOUR, CUT, DARK, KEEP, analyze_frame, detect_surface, reject_frames
 from .stacking import Stacker
@@ -165,6 +166,7 @@ class Pipeline:
         aligner = GlobalAligner(best_lum, a.surface, tuple(a.centroids[best]),
                                 search=self.settings.align.search_radius)
         acc = np.zeros_like(best_lum, dtype=np.float64)
+        acc_w = np.zeros_like(best_lum, dtype=np.float64)
         h, w = best_lum.shape
         stability = StabilityMap(w, h) if a.surface else None
         for k, i in enumerate(order[:count]):
@@ -172,13 +174,16 @@ class Pipeline:
                 raise Cancelled()
             lum = luminance(self.source.frame(int(i))).astype(np.float32)
             dx, dy, _ = aligner.measure(lum, tuple(a.centroids[i]))
-            aligned = sample_shifted(lum, dx, dy, w, h)
-            acc += aligned
+            aligned = sample_shifted(lum, dx, dy, w, h, border=cv2.BORDER_REPLICATE)
+            # Only where this frame really covers the reference (see alignment.coverage).
+            cover = np.maximum(coverage(w, h, dx, dy, w, h), COVERAGE_FLOOR)
+            acc += aligned * cover
+            acc_w += cover
             if stability is not None:
                 stability.add(aligned)
             if progress:
                 progress((k + 1) / count, tr("Image de référence : {done}/{total}", done=k + 1, total=count))
-        self.reference = (acc / count).astype(np.float32)
+        self.reference = (acc / acc_w).astype(np.float32)
         self.reference_index = best
         self._aligner = GlobalAligner(self.reference, a.surface, tuple(a.centroids[best]),
                                       search=self.settings.align.search_radius,
